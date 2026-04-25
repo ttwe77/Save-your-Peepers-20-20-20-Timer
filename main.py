@@ -11,6 +11,7 @@ import time
 import pystray
 import json
 import shutil
+import tkinter.font as tkfont
 from PIL import Image, ImageDraw, ImageTk
 
 
@@ -61,6 +62,7 @@ TRANSLATIONS = {
         "set_press_hk": "Нажми комбинацию...",
         "theme": "Тема:",
         "lang": "Язык:",
+        "font": "Шрифт:",
         "tray_show": "Развернуть",
         "tray_quit": "Закрыть полностью",
         "warning_text": "🤯 Скоро отдых!",
@@ -97,6 +99,7 @@ TRANSLATIONS = {
         "set_press_hk": "Press combination...",
         "theme": "Theme:",
         "lang": "Language:",
+        "font": "Font:",
         "tray_show": "Show",
         "tray_quit": "Quit",
         "warning_text": "👀 Rest soon!",
@@ -132,6 +135,7 @@ TRANSLATIONS = {
         "set_press_hk": "按下快捷键组合...",
         "theme": "主题：",
         "lang": "语言：",
+        "font": "字体：",
         "tray_show": "显示主界面",
         "tray_quit": "彻底退出",
         "warning_text": "即将休息",
@@ -212,11 +216,11 @@ class TimerApp(ctk.CTk):
         self.color_pause = ("#b37700", "#FFB84D")
 
         # --- ИНТЕРФЕЙС ---
-        self.phase_label = ctk.CTkLabel(self, text=self.t("focus"), font=("Helvetica", 20, "bold"),
+        self.phase_label = ctk.CTkLabel(self, text=self.t("focus"), font=self.get_font(20, "bold"),
                                         text_color=self.color_focus)
         self.phase_label.pack(pady=(20, 0))
 
-        self.time_label = ctk.CTkLabel(self, text=self.format_time(self.time_left), font=("Helvetica", 56, "bold"))
+        self.time_label = ctk.CTkLabel(self, text=self.format_time(self.time_left), font=self.get_font(56, "bold"))
         self.time_label.pack(pady=10)
 
         self.pause_button = ctk.CTkButton(self, text=self.t("btn_pause"), command=self.toggle_pause)
@@ -231,13 +235,14 @@ class TimerApp(ctk.CTk):
         self.settings_button.pack(pady=5)
 
         self.cycles_label = ctk.CTkLabel(self, text=self.t("cycles_count").format(count=self.total_cycles),
-                                         font=("Helvetica", 14, "bold"), text_color="#FFB84D")
+                                         font=self.get_font(14, "bold"), text_color="#FFB84D")
         self.cycles_label.pack(side="bottom", pady=(0, 15))
 
         self.info_label = ctk.CTkLabel(self, text=self.t("info_hotkeys").format(pause=self.hotkey_pause,
                                                                                 skip=self.hotkey_skip),
-                                       text_color="gray")
+                                       font=self.get_font(12), text_color="gray")
         self.info_label.pack(side="bottom", pady=(0, 5))
+        self.update_ui_fonts()
 
         self.register_hotkeys()
         self.update_timer()
@@ -253,6 +258,7 @@ class TimerApp(ctk.CTk):
         self.hotkey_pause = 'ctrl+shift+p'
         self.hotkey_skip = 'ctrl+shift+s'
         self.theme = "Dark"
+        self.font_family = "Microsoft YaHei"
         self.total_cycles = 0
 
         if os.path.exists(self.settings_file):
@@ -269,11 +275,15 @@ class TimerApp(ctk.CTk):
                     self.hotkey_pause = data.get("hotkey_pause", self.hotkey_pause)
                     self.hotkey_skip = data.get("hotkey_skip", self.hotkey_skip)
                     self.theme = data.get("theme", self.theme)
+                    self.font_family = data.get("font_name", self.font_family)
                     self.total_cycles = data.get("total_cycles", self.total_cycles)
             except Exception as e:
                 print(f"Ошибка при загрузке настроек: {e}")
 
         ctk.set_appearance_mode(self.theme)
+        self.font_options = self.get_system_fonts()
+        if self.font_family not in self.font_options:
+            self.font_family = self.font_options[0] if self.font_options else "Helvetica"
 
     def save_settings_to_file(self):
         data = {
@@ -287,6 +297,7 @@ class TimerApp(ctk.CTk):
             "hotkey_pause": self.hotkey_pause,
             "hotkey_skip": self.hotkey_skip,
             "theme": ctk.get_appearance_mode(),
+            "font_name": self.font_family,
             "total_cycles": self.total_cycles
         }
         try:
@@ -305,6 +316,41 @@ class TimerApp(ctk.CTk):
 
     def t(self, key):
         return TRANSLATIONS[self.lang][key]
+
+    def get_system_fonts(self):
+        fonts = sorted(set(tkfont.families()))
+        preferred = [
+            "Microsoft YaHei", "微软雅黑", "SimHei", "黑体", "KaiTi", "楷体", "宋体", "SimSun",
+            "NSimSun", "Microsoft JhengHei", "华文细黑", "方正兰亭黑", "PingFang SC"
+        ]
+
+        def sort_key(name):
+            lower = name.lower()
+            priority = 0 if any(pref.lower() in lower for pref in preferred) or any("\u4e00" <= ch <= "\u9fff" for ch in name) else 1
+            return (priority, lower)
+
+        return sorted(fonts, key=sort_key)
+
+    def get_font(self, size, weight="normal"):
+        return (self.font_family, size, weight)
+
+    def update_ui_fonts(self):
+        try:
+            self.phase_label.configure(font=self.get_font(20, "bold"))
+            self.time_label.configure(font=self.get_font(56, "bold"))
+            self.cycles_label.configure(font=self.get_font(14, "bold"))
+            self.info_label.configure(font=self.get_font(12))
+        except Exception:
+            pass
+
+        if self.overlay_window and self.overlay_window.winfo_exists():
+            self.overlay_main_label.configure(font=self.get_font(60, "bold"))
+            self.overlay_time_label.configure(font=self.get_font(40))
+
+        if self.warning_window and self.warning_window.winfo_exists():
+            for child in self.warning_window.winfo_children():
+                if isinstance(child, ctk.CTkLabel):
+                    child.configure(font=self.get_font(14, "bold"))
 
     def update_ui_texts(self):
         self.title(self.t("title"))
@@ -439,7 +485,7 @@ class TimerApp(ctk.CTk):
             self.warning_window.geometry(f"{ww}x{wh}+{x}+{y}")
 
             lbl = ctk.CTkLabel(self.warning_window, text=self.t("warning_text"),
-                               text_color="#FFB84D", font=("Helvetica", 14, "bold"))
+                               text_color="#FFB84D", font=self.get_font(14, "bold"))
             lbl.pack(expand=True, fill="both")
 
             self.fade_warning(0.0, target=0.9, step=0.05)
@@ -481,12 +527,12 @@ class TimerApp(ctk.CTk):
             self.overlay_window.geometry(f"{w}x{h}+0+0")
 
             self.overlay_main_label = ctk.CTkLabel(self.overlay_window, text=self.t("overlay_main"),
-                                                   font=("Helvetica", 60, "bold"), text_color=text_color)
+                                                   font=self.get_font(60, "bold"), text_color=text_color)
             self.overlay_main_label.pack(expand=True)
 
             self.overlay_time_label = ctk.CTkLabel(self.overlay_window,
                                                    text=self.t("overlay_time").format(time=self.time_left),
-                                                   font=("Helvetica", 40), text_color=text_color)
+                                                   font=self.get_font(40), text_color=text_color)
             self.overlay_time_label.pack(pady=50)
             self.overlay_window.bind('<Escape>', lambda e: self.skip_cycle())
 
@@ -502,8 +548,8 @@ class TimerApp(ctk.CTk):
     def show_unlock_code(self):
         self.current_code = ''.join(random.choices(string.digits, k=4))
         self.typed_code = ""
-        self.overlay_main_label.configure(text=f"{self.current_code}", font=("Helvetica", 100, "bold"))
-        self.overlay_time_label.configure(text=self.t("overlay_type_code"), font=("Helvetica", 30))
+        self.overlay_main_label.configure(text=f"{self.current_code}", font=self.get_font(100, "bold"))
+        self.overlay_time_label.configure(text=self.t("overlay_type_code"), font=self.get_font(30))
         self.overlay_window.bind('<Key>', self.handle_key_press)
         self.overlay_window.focus_force()
 
@@ -537,6 +583,10 @@ class TimerApp(ctk.CTk):
         def live_theme_change(choice):
             ctk.set_appearance_mode(choice)
 
+        def live_font_change(choice):
+            self.font_family = choice
+            self.update_ui_fonts()
+
         def live_lang_change(choice):
             if choice == "RU":
                 self.lang = "ru"
@@ -562,6 +612,7 @@ class TimerApp(ctk.CTk):
             lbl_hk_pause.configure(text=self.t("set_hk_pause"))
             lbl_hk_skip.configure(text=self.t("set_hk_skip"))
             btn_save.configure(text=self.t("set_save"))
+            lbl_font.configure(text=self.t("font"))
 
             for btn in (self.btn_bind_pause, self.btn_bind_skip):
                 if btn.cget("text") in [TRANSLATIONS["ru"]["set_press_hk"], TRANSLATIONS["en"]["set_press_hk"]]:
@@ -586,6 +637,12 @@ class TimerApp(ctk.CTk):
         else:
             lang_menu.set("ZH")
         lang_menu.pack(side="left", padx=5)
+
+        lbl_font = ctk.CTkLabel(settings_win, text=self.t("font"))
+        lbl_font.pack(pady=(5, 0))
+        font_menu = ctk.CTkOptionMenu(settings_win, values=self.font_options, width=300, command=live_font_change)
+        font_menu.set(self.font_family if self.font_family in self.font_options else (self.font_options[0] if self.font_options else self.font_family))
+        font_menu.pack()
 
         lbl_work = ctk.CTkLabel(settings_win, text=self.t("set_work"))
         lbl_work.pack(pady=(5, 0))
@@ -647,6 +704,7 @@ class TimerApp(ctk.CTk):
             self.use_overlay = overlay_switch.get() == 1
             self.require_code = code_switch.get() == 1
             self.use_warning = warning_switch.get() == 1
+            self.font_family = font_menu.get()
 
             chosen_pos_text = pos_menu.get()
             if chosen_pos_text in [TRANSLATIONS["ru"]["pos_br"], TRANSLATIONS["en"]["pos_br"]]:
