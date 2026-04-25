@@ -55,20 +55,64 @@
 **PyInstaller 单文件模式**  
 
 ```bash
-pyinstaller --onefile --windowed --name "EyeCare_OneFile" --icon="icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --add-data "sounds;sounds" --hidden-import PIL._tkinter_finder --hidden-import customtkinter main.py
+pyinstaller --onefile --windowed --name "SaveYourPeepers_PyInstaller_OneFile" --icon="icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --add-data "sounds;sounds" --add-data "AutostartManager.exe;." --hidden-import PIL._tkinter_finder --hidden-import customtkinter --distpath "dist_onefile" --workpath "build_onefile" main.py
 ```
 
 **PyInstaller 文件夹模式**
 
 ```bash
-pyinstaller --onefile --windowed --name "EyeCare_OneFile" --icon="icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --add-data "sounds;sounds" --hidden-import PIL._tkinter_finder --hidden-import customtkinter --distpath "dist_onefile" --workpath "build_onefile" main.py
+pyinstaller --onedir --windowed --name "SaveYourPeepers_PyInstaller_Folder" --icon="icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --add-data "sounds;sounds" --hidden-import PIL._tkinter_finder --hidden-import customtkinter --distpath "dist_folder" --workpath "build_folder" main.py
 ```
 
 **Nuitka 文件夹模式**  
 
 ```bash
-nuitka --standalone --windows-disable-console --enable-plugin=tk-inter --output-filename=EyeCare_Folder.exe --windows-icon-from-ico=icon.ico --include-data-file=icon.ico=icon.ico --include-data-file=icon.png=icon.png --include-data-dir=sounds=sounds --include-module=PIL._tkinter_finder --include-module=customtkinter --output-dir=dist_folder\EyeCare_Folder main.py
+nuitka --standalone --windows-disable-console --enable-plugin=tk-inter --output-filename=SaveYourPeepers_Nuitka_Folder.exe --windows-icon-from-ico=icon.ico --include-data-file=icon.ico=icon.ico --include-data-file=icon.png=icon.png --include-data-dir=sounds=sounds --include-module=PIL._tkinter_finder --include-module=customtkinter --output-dir=dist_nuitka main.py
 ```
+
+**AutostartManager.cpp的编译命令（MinGW64）**
+
+```bash
+g++ -static -o AutostartManager.exe AutostartManager.cpp -lshlwapi -mwindows
+```
+
+### AutostartManager.cpp 详细说明
+
+`AutostartManager.cpp` 是一个独立的 Windows C++ 应用程序，用于管理 "守护你的眼睛" 程序的开机自启动功能。
+
+#### 功能特点
+
+- **自动检测程序**：自动扫描当前目录下的可执行文件（排除自身）
+- **开机自启动管理**：提供图形界面添加/移除开机自启动项
+- **DPI适配**：支持高DPI显示器，界面元素自动缩放
+- **中文界面**：完全中文化的用户界面
+
+#### 使用说明
+
+1. **放置位置**：将编译后的 `AutostartManager.exe` 与主程序放在同一目录下
+2. **运行方式**：
+   - 双击运行 `AutostartManager.exe`
+   - 程序会自动检测目录下的其他可执行文件
+   - 点击"添加到开机自启动"按钮启用开机自启动
+   - 点击"从开机自启动移除"按钮禁用开机自启动
+
+#### 技术实现
+
+- **注册表操作**：通过 Windows 注册表管理开机自启动项（`HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`）
+- **窗口编程**：使用 Windows API 创建图形界面
+- **文件检测**：自动扫描 `.exe` 文件并排除自身
+- **错误处理**：完善的错误提示和状态反馈
+
+#### 最新改进
+
+- **文本框高度优化**：检测到的程序文本框高度从25像素增加到40像素，显示更清晰
+- **DPI适配增强**：支持高DPI显示器，界面元素自动缩放
+- **窗口布局优化**：整体窗口高度增加到240像素，控件间距更合理
+
+#### 注意事项
+
+- 程序会自动排除自身，只管理其他可执行文件
+- 支持中文字符显示，无需额外配置
 
 </details>
 
@@ -127,20 +171,64 @@ Use the following commands to package the app yourself:
 **PyInstaller Single-File Mode**
 
 ```bash
-pyinstaller --onefile --windowed --name "EyeCare_OneFile" --icon="icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --add-data "sounds;sounds" --hidden-import PIL._tkinter_finder --hidden-import customtkinter main.py
+pyinstaller --onefile --windowed --name "SaveYourPeepers_PyInstaller_OneFile" --icon="icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --add-data "sounds;sounds" --add-data "AutostartManager.exe;." --hidden-import PIL._tkinter_finder --hidden-import customtkinter --distpath "dist_onefile" --workpath "build_onefile" main.py
 ```
 
 **PyInstaller Folder Mode**
 
 ```bash
-pyinstaller --onefile --windowed --name "EyeCare_OneFile" --icon="icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --add-data "sounds;sounds" --hidden-import PIL._tkinter_finder --hidden-import customtkinter --distpath "dist_onefile" --workpath "build_onefile" main.py
+pyinstaller --onedir --windowed --name "SaveYourPeepers_PyInstaller_Folder" --icon="icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --add-data "sounds;sounds" --hidden-import PIL._tkinter_finder --hidden-import customtkinter --distpath "dist_folder" --workpath "build_folder" main.py
 ```
 
 **Nuitka Folder Mode**
 
 ```bash
-nuitka --standalone --windows-disable-console --enable-plugin=tk-inter --output-filename=EyeCare_Folder.exe --windows-icon-from-ico=icon.ico --include-data-file=icon.ico=icon.ico --include-data-file=icon.png=icon.png --include-data-dir=sounds=sounds --include-module=PIL._tkinter_finder --include-module=customtkinter --output-dir=dist_folder\EyeCare_Folder main.py
+nuitka --standalone --windows-disable-console --enable-plugin=tk-inter --output-filename=SaveYourPeepers_Nuitka_Folder.exe --windows-icon-from-ico=icon.ico --include-data-file=icon.ico=icon.ico --include-data-file=icon.png=icon.png --include-data-dir=sounds=sounds --include-module=PIL._tkinter_finder --include-module=customtkinter --output-dir=dist_nuitka main.py
 ```
+
+**Compilation command for AutostartManager.cpp (MinGW64)**
+
+```bash
+g++ -static -o AutostartManager.exe AutostartManager.cpp -lshlwapi -mwindows
+```
+
+### Detailed Explanation of AutostartManager.cpp
+
+`AutostartManager.cpp` is a standalone Windows C++ application for managing the auto-start functionality of the "Save Your Peepers" program.
+
+#### Features
+
+- **Automatic Program Detection**: Automatically scans for executable files in the current directory (excluding itself)
+- **Auto-start Management**: Provides a GUI interface to add/remove auto-start entries
+- **DPI Adaptation**: Supports high DPI displays with automatic UI scaling
+- **Chinese Interface**: Fully localized Chinese user interface
+
+#### Usage Instructions
+
+1. **Placement**: Place the compiled `AutostartManager.exe` in the same directory as the main program
+2. **Operation**:
+   - Double-click to run `AutostartManager.exe`
+   - The program will automatically detect other executable files in the directory
+   - Click "Add to Auto-start" to enable auto-start
+   - Click "Remove from Auto-start" to disable auto-start
+
+#### Technical Implementation
+
+- **Registry Operations**: Manages auto-start entries via Windows Registry (`HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`)
+- **Window Programming**: Creates GUI using Windows API
+- **File Detection**: Automatically scans `.exe` files and excludes itself
+- **Error Handling**: Comprehensive error prompts and status feedback
+
+#### Latest Improvements
+
+- **Text Box Height Optimization**: Detected program text box height increased from 25px to 40px for better visibility
+- **Enhanced DPI Adaptation**: Supports high DPI displays with automatic UI scaling
+- **Window Layout Optimization**: Overall window height increased to 240px with better control spacing
+
+#### Notes
+
+- The program automatically excludes itself and only manages other executable files
+- Supports Chinese character display without additional configuration
 
 </details>
 
@@ -197,22 +285,64 @@ nuitka --standalone --windows-disable-console --enable-plugin=tk-inter --output-
 **PyInstaller – однофайловый режим**
 
 ```bash
-pyinstaller --onefile --windowed --name "EyeCare_OneFile" --icon="icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --add-data "sounds;sounds" --hidden-import PIL._tkinter_finder --hidden-import customtkinter main.py
+pyinstaller --onefile --windowed --name "SaveYourPeepers_PyInstaller_OneFile" --icon="icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --add-data "sounds;sounds" --add-data "AutostartManager.exe;." --hidden-import PIL._tkinter_finder --hidden-import customtkinter --distpath "dist_onefile" --workpath "build_onefile" main.py
 ```
 
 **PyInstaller – режим папки**
 
 ```bash
-pyinstaller --onefile --windowed --name "EyeCare_OneFile" --icon="icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --add-data "sounds;sounds" --hidden-import PIL._tkinter_finder --hidden-import customtkinter --distpath "dist_onefile" --workpath "build_onefile" main.py
+pyinstaller --onedir --windowed --name "SaveYourPeepers_PyInstaller_Folder" --icon="icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --add-data "sounds;sounds" --hidden-import PIL._tkinter_finder --hidden-import customtkinter --distpath "dist_folder" --workpath "build_folder" main.py
 ```
 
 **Nuitka – режим папки**
 
 ```bash
-nuitka --standalone --windows-disable-console --enable-plugin=tk-inter --output-filename=EyeCare_Folder.exe --windows-icon-from-ico=icon.ico --include-data-file=icon.ico=icon.ico --include-data-file=icon.png=icon.png --include-data-dir=sounds=sounds --include-module=PIL._tkinter_finder --include-module=customtkinter --output-dir=dist_folder\EyeCare_Folder main.py
+nuitka --standalone --windows-disable-console --enable-plugin=tk-inter --output-filename=SaveYourPeepers_Nuitka_Folder.exe --windows-icon-from-ico=icon.ico --include-data-file=icon.ico=icon.ico --include-data-file=icon.png=icon.png --include-data-dir=sounds=sounds --include-module=PIL._tkinter_finder --include-module=customtkinter --output-dir=dist_nuitka main.py
 ```
 
+**Команда компиляции AutostartManager.cpp (MinGW64)**
 
+```bash
+g++ -static -o AutostartManager.exe AutostartManager.cpp -lshlwapi -mwindows
+```
+
+### Подробное описание AutostartManager.cpp
+
+`AutostartManager.cpp` – это отдельное приложение на C++ для Windows, которое управляет автозапуском программы "Бережем глазки".
+
+#### Особенности
+
+- **Автоматическое обнаружение программ**: Автоматически сканирует исполняемые файлы в текущей директории (исключая себя)
+- **Управление автозапуском**: Предоставляет графический интерфейс для добавления/удаления записей автозапуска
+- **Адаптация к DPI**: Поддерживает дисплеи с высоким DPI с автоматическим масштабированием интерфейса
+- **Китайский интерфейс**: Полностью локализованный китайский пользовательский интерфейс
+
+#### Инструкция по использованию
+
+1. **Размещение**: Поместите скомпилированный `AutostartManager.exe` в ту же директорию, что и основная программа
+2. **Работа**:
+   - Двойной клик для запуска `AutostartManager.exe`
+   - Программа автоматически обнаружит другие исполняемые файлы в директории
+   - Нажмите "Добавить в автозапуск" для включения автозапуска
+   - Нажмите "Удалить из автозапуска" для отключения автозапуска
+
+#### Техническая реализация
+
+- **Работа с реестром**: Управляет записями автозапуска через Windows Registry (`HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`)
+- **Программирование окон**: Создает GUI с использованием Windows API
+- **Обнаружение файлов**: Автоматически сканирует `.exe` файлы и исключает себя
+- **Обработка ошибок**: Комплексные подсказки об ошибках и обратная связь о статусе
+
+#### Последние улучшения
+
+- **Оптимизация высоты текстового поля**: Высота текстового поля обнаруженной программы увеличена с 25px до 40px для лучшей видимости
+- **Улучшенная адаптация к DPI**: Поддерживает дисплеи с высоким DPI с автоматическим масштабированием интерфейса
+- **Оптимизация макета окна**: Общая высота окна увеличена до 240px с улучшенным расстоянием между элементами управления
+
+#### Примечания
+
+- Программа автоматически исключает себя и управляет только другими исполняемыми файлами
+- Поддерживает отображение китайских символов без дополнительной настройки
 
 </details>
 
