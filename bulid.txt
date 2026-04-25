@@ -1,8 +1,10 @@
 1. PyInstaller，单文件模式
-pyinstaller --onefile --windowed --name "EyeCare_OneFile" --icon="icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --add-data "sounds;sounds" --hidden-import PIL._tkinter_finder --hidden-import customtkinter --distpath "dist_onefile" --workpath "build_onefile" main.py
+pyinstaller --onefile --windowed --name "SaveYourPeepers_PyInstaller_OneFile" --icon="icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --add-data "sounds;sounds" --add-data "AutostartManager.exe;." --hidden-import PIL._tkinter_finder --hidden-import customtkinter --distpath "dist_onefile" --workpath "build_onefile" main.py
 
 2. PyInstaller，文件夹模式
-pyinstaller --onefile --windowed --name "EyeCare_OneFile" --icon="icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --add-data "sounds;sounds" --hidden-import PIL._tkinter_finder --hidden-import customtkinter --distpath "dist_onefile" --workpath "build_onefile" main.py
+pyinstaller --onedir --windowed --name "SaveYourPeepers_PyInstaller_Folder" --icon="icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --add-data "sounds;sounds" --hidden-import PIL._tkinter_finder --hidden-import customtkinter --distpath "dist_folder" --workpath "build_folder" main.py
 
 3. Nuitka 文件夹模式（一行命令）
-nuitka --standalone --windows-disable-console --enable-plugin=tk-inter --output-filename=EyeCare_Folder.exe --windows-icon-from-ico=icon.ico --include-data-file=icon.ico=icon.ico --include-data-file=icon.png=icon.png --include-data-dir=sounds=sounds --include-module=PIL._tkinter_finder --include-module=customtkinter --output-dir=dist_folder\EyeCare_Folder main.py
+nuitka --standalone --windows-disable-console --enable-plugin=tk-inter --output-filename=SaveYourPeepers_Nuitka_Folder.exe --windows-icon-from-ico=icon.ico --include-data-file=icon.ico=icon.ico --include-data-file=icon.png=icon.png --include-data-dir=sounds=sounds --include-module=PIL._tkinter_finder --include-module=customtkinter --output-dir=dist_nuitka main.py
+
+g++ -static -o AutostartManager.exe AutostartManager.cpp -lshlwapi -mwindows

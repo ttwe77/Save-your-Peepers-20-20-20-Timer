@@ -69,7 +69,8 @@ TRANSLATIONS = {
         "pos_br": "Внизу справа",
         "pos_bl": "Внизу слева",
         "pos_tr": "Вверху справа",
-        "pos_tl": "Вверху слева"
+        "pos_tl": "Вверху слева",
+        "set_auto_start": "Автозапуск"
     },
     "en": {
         "title": "Save Your Peepers 👁️",
@@ -106,7 +107,8 @@ TRANSLATIONS = {
         "pos_br": "Bottom Right",
         "pos_bl": "Bottom Left",
         "pos_tr": "Top Right",
-        "pos_tl": "Top Left"},
+        "pos_tl": "Top Left",
+        "set_auto_start": "Auto Start"},
     "zh": {
         "title": "守护双眼👁️",
         "focus": "下次提醒",
@@ -142,7 +144,8 @@ TRANSLATIONS = {
         "pos_br": "右下角",
         "pos_bl": "左下角",
         "pos_tr": "右上角",
-        "pos_tl": "左上角"
+        "pos_tl": "左上角",
+        "set_auto_start": "开机自启动"
     }
 }
 
@@ -264,6 +267,7 @@ class TimerApp(ctk.CTk):
         self.theme = "Dark"
         self.font_family = "Microsoft YaHei UI"
         self.total_cycles = 0
+        self.auto_start = False
 
         if os.path.exists(self.settings_file):
             try:
@@ -281,6 +285,7 @@ class TimerApp(ctk.CTk):
                     self.theme = data.get("theme", self.theme)
                     self.font_family = data.get("font_name", self.font_family)
                     self.total_cycles = data.get("total_cycles", self.total_cycles)
+                    self.auto_start = data.get("auto_start", self.auto_start)
             except Exception as e:
                 print(f"Ошибка при загрузке настроек: {e}")
 
@@ -288,6 +293,15 @@ class TimerApp(ctk.CTk):
         self.font_options = self.get_system_fonts()
         if self.font_family not in self.font_options:
             self.font_family = self.font_options[0] if self.font_options else "Helvetica"
+
+    def open_autostart_manager(self):
+        import subprocess
+        autostart_exe = os.path.join(self.base_dir, "AutostartManager.exe")
+        if os.path.exists(autostart_exe):
+            try:
+                subprocess.Popen([autostart_exe], shell=True)
+            except Exception as e:
+                print(f"无法启动AutostartManager: {e}")
 
     def save_settings_to_file(self):
         data = {
@@ -302,7 +316,8 @@ class TimerApp(ctk.CTk):
             "hotkey_skip": self.hotkey_skip,
             "theme": ctk.get_appearance_mode(),
             "font_name": self.font_family,
-            "total_cycles": self.total_cycles
+            "total_cycles": self.total_cycles,
+            "auto_start": self.auto_start
         }
         try:
             with open(self.settings_file, "w", encoding="utf-8") as f:
@@ -678,7 +693,7 @@ class TimerApp(ctk.CTk):
     def open_settings(self):
         settings_win = ctk.CTkToplevel(self)
         settings_win.title(self.t("set_title"))
-        settings_win.geometry("380x660")
+        settings_win.geometry("400x500")
         settings_win.attributes("-topmost", True)
         settings_win.grab_set()
 
@@ -708,6 +723,7 @@ class TimerApp(ctk.CTk):
             overlay_switch.configure(text=self.t("set_overlay"))
             code_switch.configure(text=self.t("set_code"))
             warning_switch.configure(text=self.t("set_warning"))
+            auto_start_btn.configure(text=self.t("set_auto_start"))
             lbl_warn_pos.configure(text=self.t("set_warn_pos"))
 
             pos_vals = [self.t("pos_br"), self.t("pos_bl"), self.t("pos_tr"), self.t("pos_tl")]
@@ -723,8 +739,12 @@ class TimerApp(ctk.CTk):
                 if btn.cget("text") in [TRANSLATIONS["ru"]["set_press_hk"], TRANSLATIONS["en"]["set_press_hk"]]:
                     btn.configure(text=self.t("set_press_hk"))
 
-        frame_top = ctk.CTkFrame(settings_win, fg_color="transparent")
-        frame_top.pack(pady=10, fill="x", padx=20)
+        # Create scrollable frame
+        scrollable_frame = ctk.CTkScrollableFrame(settings_win, width=380, height=450)
+        scrollable_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        frame_top = ctk.CTkFrame(scrollable_frame, fg_color="transparent")
+        frame_top.pack(pady=10, fill="x")
 
         lbl_theme = ctk.CTkLabel(frame_top, text=self.t("theme"))
         lbl_theme.pack(side="left")
@@ -743,26 +763,26 @@ class TimerApp(ctk.CTk):
             lang_menu.set("ZH")
         lang_menu.pack(side="left", padx=5)
 
-        lbl_font = ctk.CTkLabel(settings_win, text=self.t("font"))
+        lbl_font = ctk.CTkLabel(scrollable_frame, text=self.t("font"))
         lbl_font.pack(pady=(5, 0))
-        font_menu = ctk.CTkOptionMenu(settings_win, values=self.font_options, width=300, command=live_font_change)
+        font_menu = ctk.CTkOptionMenu(scrollable_frame, values=self.font_options, width=300, command=live_font_change)
         font_menu.set(self.font_family if self.font_family in self.font_options else (self.font_options[0] if self.font_options else self.font_family))
         font_menu.pack()
 
-        lbl_work = ctk.CTkLabel(settings_win, text=self.t("set_work"))
+        lbl_work = ctk.CTkLabel(scrollable_frame, text=self.t("set_work"))
         lbl_work.pack(pady=(5, 0))
-        work_entry = ctk.CTkEntry(settings_win, justify="center")
+        work_entry = ctk.CTkEntry(scrollable_frame, justify="center")
         work_entry.insert(0, str(self.work_duration // 60))
         work_entry.pack()
 
-        lbl_rest = ctk.CTkLabel(settings_win, text=self.t("set_rest"))
+        lbl_rest = ctk.CTkLabel(scrollable_frame, text=self.t("set_rest"))
         lbl_rest.pack(pady=(5, 0))
-        rest_entry = ctk.CTkEntry(settings_win, justify="center")
+        rest_entry = ctk.CTkEntry(scrollable_frame, justify="center")
         rest_entry.insert(0, str(self.rest_duration))
         rest_entry.pack()
 
-        switch_frame = ctk.CTkFrame(settings_win, fg_color="transparent")
-        switch_frame.pack(pady=10)
+        switch_frame = ctk.CTkFrame(scrollable_frame, fg_color="transparent")
+        switch_frame.pack(pady=10, fill="x")
 
         overlay_switch = ctk.CTkSwitch(switch_frame, text=self.t("set_overlay"))
         overlay_switch.select() if self.use_overlay else overlay_switch.deselect()
@@ -776,8 +796,11 @@ class TimerApp(ctk.CTk):
         warning_switch.select() if self.use_warning else warning_switch.deselect()
         warning_switch.pack(anchor="w", pady=5)
 
-        pos_frame = ctk.CTkFrame(settings_win, fg_color="transparent")
-        pos_frame.pack(pady=5)
+        auto_start_btn = ctk.CTkButton(switch_frame, text=self.t("set_auto_start"), command=self.open_autostart_manager, fg_color="#444444")
+        auto_start_btn.pack(anchor="w", pady=5)
+
+        pos_frame = ctk.CTkFrame(scrollable_frame, fg_color="transparent")
+        pos_frame.pack(pady=5, fill="x")
         lbl_warn_pos = ctk.CTkLabel(pos_frame, text=self.t("set_warn_pos"))
         lbl_warn_pos.pack(side="left", padx=5)
 
@@ -786,15 +809,15 @@ class TimerApp(ctk.CTk):
         pos_menu.set(self.t(self.warn_position))
         pos_menu.pack(side="left")
 
-        lbl_hk_pause = ctk.CTkLabel(settings_win, text=self.t("set_hk_pause"))
+        lbl_hk_pause = ctk.CTkLabel(scrollable_frame, text=self.t("set_hk_pause"))
         lbl_hk_pause.pack(pady=(5, 0))
-        self.btn_bind_pause = ctk.CTkButton(settings_win, text=self.hotkey_pause,
+        self.btn_bind_pause = ctk.CTkButton(scrollable_frame, text=self.hotkey_pause,
                                             command=lambda: self.record_hotkey(self.btn_bind_pause, 'hotkey_pause'))
         self.btn_bind_pause.pack()
 
-        lbl_hk_skip = ctk.CTkLabel(settings_win, text=self.t("set_hk_skip"))
+        lbl_hk_skip = ctk.CTkLabel(scrollable_frame, text=self.t("set_hk_skip"))
         lbl_hk_skip.pack(pady=(5, 0))
-        self.btn_bind_skip = ctk.CTkButton(settings_win, text=self.hotkey_skip,
+        self.btn_bind_skip = ctk.CTkButton(scrollable_frame, text=self.hotkey_skip,
                                            command=lambda: self.record_hotkey(self.btn_bind_skip, 'hotkey_skip'))
         self.btn_bind_skip.pack()
 
@@ -838,7 +861,7 @@ class TimerApp(ctk.CTk):
 
         btn_save = ctk.CTkButton(settings_win, text=self.t("set_save"), command=save_settings, fg_color="green",
                                  hover_color="darkgreen")
-        btn_save.pack(pady=15)
+        btn_save.pack(pady=10)
 
     def record_hotkey(self, button, attr_name):
         button.configure(text=self.t("set_press_hk"))
