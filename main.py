@@ -392,13 +392,9 @@ class TimerApp(ctk.CTk):
             self.update_phase_label()
 
     def skip_cycle(self):
-        self.is_working_phase = True
-        self.time_left = self.work_duration
-        self.waiting_for_code = False
-        self.hide_warning(instant=True)
-        self.hide_overlay()
-        self.update_phase_label()
-        self.time_label.configure(text=self.format_time(self.time_left))
+        self.play_random_sound()
+        self.waiting_for_code = True
+        self.show_unlock_code()
 
     def update_phase_label(self):
         if self.is_paused: return
@@ -434,17 +430,12 @@ class TimerApp(ctk.CTk):
                     if self.use_overlay:
                         self.show_overlay()
                 else:
-                    if self.use_overlay and self.require_code:
-                        self.play_random_sound() #倒计时结束就播放
-                        self.waiting_for_code = True
-                        self.show_unlock_code()
-                    else:
-                        self.add_successful_cycle()
-                        self.hide_overlay()
-                        self.is_working_phase = True
-                        self.time_left = self.work_duration
-                        self.play_random_sound()
-                        self.update_phase_label()
+                    self.add_successful_cycle()
+                    self.hide_overlay()
+                    self.is_working_phase = True
+                    self.time_left = self.work_duration
+                    self.play_random_sound()
+                    self.update_phase_label()
 
             self.time_label.configure(text=self.format_time(self.time_left))
 
@@ -548,6 +539,11 @@ class TimerApp(ctk.CTk):
     def show_unlock_code(self):
         self.current_code = ''.join(random.choices(string.digits, k=4))
         self.typed_code = ""
+        
+        # 确保覆盖窗口存在
+        if self.overlay_window is None or not self.overlay_window.winfo_exists():
+            self.show_overlay()
+        
         self.overlay_main_label.configure(text=f"{self.current_code}", font=self.get_font(100, "bold"))
         self.overlay_time_label.configure(text=self.t("overlay_type_code"), font=self.get_font(30))
         self.overlay_window.bind('<Key>', self.handle_key_press)
@@ -558,12 +554,12 @@ class TimerApp(ctk.CTk):
         if char.isdigit():
             self.typed_code += char
             if self.typed_code[-4:] == self.current_code:
-                self.add_successful_cycle()
                 self.hide_overlay()
                 self.is_working_phase = True
                 self.time_left = self.work_duration
                 self.waiting_for_code = False
                 self.update_phase_label()
+                self.time_label.configure(text=self.format_time(self.time_left))
 
     def hide_overlay(self):
         if self.overlay_window and self.overlay_window.winfo_exists():
