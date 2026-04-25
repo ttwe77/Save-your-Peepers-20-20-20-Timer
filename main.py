@@ -1,3 +1,4 @@
+#This project is forked from Mythlon/Save-your-Peepers-20-20-20-Timer, which is licensed under the MIT License.
 import customtkinter as ctk
 import keyboard
 import pygame
@@ -102,7 +103,42 @@ TRANSLATIONS = {
         "pos_br": "Bottom Right",
         "pos_bl": "Bottom Left",
         "pos_tr": "Top Right",
-        "pos_tl": "Top Left"
+        "pos_tl": "Top Left"},
+    "zh": {
+        "title": "守护双眼👁️",
+        "focus": "专注时段",
+        "pause": "已暂停",
+        "rest_overlay": "远眺休息！",
+        "rest_no_overlay": "休息（无弹窗）",
+        "btn_pause": "暂停",
+        "btn_resume": "恢复",
+        "btn_skip": "跳过本轮",
+        "btn_settings": "设置",
+        "info_hotkeys": "暂停：{pause} | 跳过：{skip}\n强制全屏时可按ESC退出",
+        "cycles_count": "🔥 已完成周期数：{count}",
+        "overlay_main": "您已持续用眼过久\n休息一会吧！\n请将注意力集中在至少6米远的地方！",
+        "overlay_time": "剩余：{time} 秒",
+        "overlay_type_code": "请在键盘输入验证码",
+        "set_title": "设置",
+        "set_work": "专注时长（分钟）：",
+        "set_rest": "休息时长（秒）：",
+        "set_overlay": "强制提醒弹窗",
+        "set_code": "需输入验证码",
+        "set_warning": "休息提醒（提前10秒）",
+        "set_warn_pos": "提醒位置：",
+        "set_hk_pause": "暂停快捷键：",
+        "set_hk_skip": "跳过快捷键：",
+        "set_save": "保存",
+        "set_press_hk": "按下快捷键组合...",
+        "theme": "主题：",
+        "lang": "语言：",
+        "tray_show": "显示主界面",
+        "tray_quit": "彻底退出",
+        "warning_text": "即将休息",
+        "pos_br": "右下角",
+        "pos_bl": "左下角",
+        "pos_tr": "右上角",
+        "pos_tl": "左上角"
     }
 }
 
@@ -207,7 +243,7 @@ class TimerApp(ctk.CTk):
         self.update_timer()
 
     def load_settings(self):
-        self.lang = "ru"
+        self.lang = "zh"
         self.work_duration = 1200
         self.rest_duration = 20
         self.use_overlay = True
@@ -336,6 +372,7 @@ class TimerApp(ctk.CTk):
                 self.time_left -= 1
 
                 if self.is_working_phase and self.use_warning and self.time_left == 10:
+                    self.play_random_sound()
                     self.show_warning()
 
                 if not self.is_working_phase and self.overlay_window:
@@ -352,6 +389,7 @@ class TimerApp(ctk.CTk):
                         self.show_overlay()
                 else:
                     if self.use_overlay and self.require_code:
+                        self.play_random_sound() #倒计时结束就播放
                         self.waiting_for_code = True
                         self.show_unlock_code()
                     else:
@@ -450,6 +488,7 @@ class TimerApp(ctk.CTk):
                                                    text=self.t("overlay_time").format(time=self.time_left),
                                                    font=("Helvetica", 40), text_color=text_color)
             self.overlay_time_label.pack(pady=50)
+            self.overlay_window.bind('<Escape>', lambda e: self.skip_cycle())
 
             self.fade_in_overlay(0.0)
 
@@ -499,7 +538,12 @@ class TimerApp(ctk.CTk):
             ctk.set_appearance_mode(choice)
 
         def live_lang_change(choice):
-            self.lang = "ru" if choice == "RU" else "en"
+            if choice == "RU":
+                self.lang = "ru"
+            elif choice == "EN":
+                self.lang = "en"
+            elif choice == "ZH":
+                self.lang = "zh"
             self.update_ui_texts()
             settings_win.title(self.t("set_title"))
             lbl_theme.configure(text=self.t("theme"))
@@ -534,8 +578,13 @@ class TimerApp(ctk.CTk):
 
         lbl_lang = ctk.CTkLabel(frame_top, text=self.t("lang"))
         lbl_lang.pack(side="left")
-        lang_menu = ctk.CTkOptionMenu(frame_top, values=["RU", "EN"], width=70, command=live_lang_change)
-        lang_menu.set("RU" if self.lang == "ru" else "EN")
+        lang_menu = ctk.CTkOptionMenu(frame_top, values=["RU", "EN", "ZH"], width=70, command=live_lang_change)
+        if self.lang == "ru":
+            lang_menu.set("RU")
+        elif self.lang == "en":
+            lang_menu.set("EN")
+        else:
+            lang_menu.set("ZH")
         lang_menu.pack(side="left", padx=5)
 
         lbl_work = ctk.CTkLabel(settings_win, text=self.t("set_work"))
