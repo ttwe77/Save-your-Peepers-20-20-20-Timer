@@ -109,7 +109,7 @@ TRANSLATIONS = {
         "pos_tl": "Top Left"},
     "zh": {
         "title": "守护双眼👁️",
-        "focus": "专注时段",
+        "focus": "下次提醒",
         "pause": "已暂停",
         "rest_overlay": "远眺休息！",
         "rest_no_overlay": "休息（无弹窗）",
@@ -394,8 +394,14 @@ class TimerApp(ctk.CTk):
 
     def skip_cycle(self):
         self.play_random_sound()
-        self.waiting_for_code = True
-        self.show_unlock_code()
+        if self.require_code:
+            self.waiting_for_code = True
+            self.show_unlock_code()
+        else:
+            self.hide_overlay()
+            self.is_working_phase = True
+            self.time_left = self.work_duration
+            self.update_phase_label()
 
     def update_phase_label(self):
         if self.is_paused: return
