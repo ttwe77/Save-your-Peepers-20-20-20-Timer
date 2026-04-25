@@ -1,4 +1,4 @@
-#This project is forked from Mythlon/Save-your-Peepers-20-20-20-Timer, which is licensed under the MIT License.
+#This project is forked from Mythlon/Save-your-Peepers-20-20-20-Timer, which is licensed under the MIT License.(https://github.com/Mythlon/Save-your-Peepers-20-20-20-Timer)
 import customtkinter as ctk
 import keyboard
 import pygame
@@ -210,6 +210,9 @@ class TimerApp(ctk.CTk):
         self.typed_code = ""
         self.tray_icon = None
         self.last_played_sound = None
+        
+        # 创建托盘图标（程序启动时立即显示）
+        self.create_tray_icon()
 
         # Цвета
         self.color_focus = ("#0059b3", "#4DA6FF")
@@ -517,8 +520,9 @@ class TimerApp(ctk.CTk):
             self.overlay_window.attributes("-topmost", True)
             self.overlay_window.attributes("-alpha", 0.0)
 
-            bg_color = "black" if ctk.get_appearance_mode() == "Light" else "white"
-            text_color = "white" if ctk.get_appearance_mode() == "Light" else "black"
+            # CAPTCHA overlay should always have dark background with light text for visibility
+            bg_color = "black"
+            text_color = "white"
             self.overlay_window.configure(fg_color=bg_color)
 
             w, h = self.winfo_screenwidth(), self.winfo_screenheight()
@@ -863,8 +867,8 @@ class TimerApp(ctk.CTk):
         draw.rectangle((16, 16, 48, 48), fill="white")
         return image
 
-    def hide_window(self):
-        self.withdraw()
+    def create_tray_icon(self):
+        """创建托盘图标（程序启动时立即显示）"""
         if not self.tray_icon:
             menu = pystray.Menu(
                 pystray.MenuItem(self.t("tray_show"), self.show_window, default=True),
@@ -874,9 +878,14 @@ class TimerApp(ctk.CTk):
             self.tray_icon = pystray.Icon("20-20-20", image, self.t("title"), menu)
             threading.Thread(target=self.tray_icon.run, daemon=True).start()
 
+    def hide_window(self):
+        self.withdraw()
+        # 确保托盘图标存在（如果尚未创建）
+        if not self.tray_icon:
+            self.create_tray_icon()
+
     def show_window(self, icon, item):
-        icon.stop()
-        self.tray_icon = None
+        # 不停止托盘图标，只显示窗口
         self.after(0, self.deiconify)
 
     def quit_app(self, icon, item):
