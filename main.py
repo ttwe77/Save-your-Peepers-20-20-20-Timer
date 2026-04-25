@@ -205,6 +205,7 @@ class TimerApp(ctk.CTk):
         self.overlay_window = None
         self.warning_window = None
         self.waiting_for_code = False
+        self._focus_loop_active = False
         self.current_code = ""
         self.typed_code = ""
         self.tray_icon = None
@@ -529,6 +530,9 @@ class TimerApp(ctk.CTk):
 
             self.fade_in_overlay(0.0)
 
+        self.force_window_focus()
+        self.start_focus_loop()
+
     def fade_in_overlay(self, current_alpha):
         if self.overlay_window and self.overlay_window.winfo_exists():
             new_alpha = current_alpha + 0.05
@@ -540,28 +544,119 @@ class TimerApp(ctk.CTk):
         self.current_code = ''.join(random.choices(string.digits, k=4))
         self.typed_code = ""
         
-        # 确保覆盖窗口存在
         if self.overlay_window is None or not self.overlay_window.winfo_exists():
             self.show_overlay()
+            self.overlay_window.attributes("-alpha", 0.5)
+        else:
+            self.start_focus_loop()
         
-        self.overlay_main_label.configure(text=f"{self.current_code}", font=self.get_font(100, "bold"))
+        self.overlay_main_label.configure(text=f"{self.current_code}", font=self.get_font(100, "bold"), text_color="white")
         self.overlay_time_label.configure(text=self.t("overlay_type_code"), font=self.get_font(30))
         self.overlay_window.bind('<Key>', self.handle_key_press)
-        self.overlay_window.focus_force()
+        
+        self.force_window_focus()
+    
+    def force_window_focus(self):
+        """强制窗口聚焦到前台（包括从全屏应用抢焦点）"""
+        if self.overlay_window and self.overlay_window.winfo_exists():
+            self.overlay_window.deiconify()
+            self.overlay_window.lift()
+            self.overlay_window.attributes('-topmost', True)
+            self.overlay_window.focus_force()
+            self.overlay_window.grab_set()
+
+            try:
+                if os.name == 'nt':
+                    import ctypes
+                    from ctypes import wintypes
+
+                    hwnd = self.overlay_window.winfo_id()
+
+                    ctypes.windll.user32.AllowSetForegroundWindow(wintypes.DWORD(-1))
+
+                    foreground_hwnd = ctypes.windll.user32.GetForegroundWindow()
+                    current_thread = ctypes.windll.kernel32.GetCurrentThreadId()
+                    foreground_thread = ctypes.windll.user32.GetWindowThreadProcessId(
+                        foreground_hwnd, None
+                    )
+
+                    ctypes.windll.user32.AttachThreadInput(
+                        current_thread, foreground_thread, True
+                    )
+
+                    ctypes.windll.user32.BringWindowToTop(hwnd)
+                    ctypes.windll.user32.SetForegroundWindow(hwnd)
+                    ctypes.windll.user32.SetActiveWindow(hwnd)
+                    ctypes.windll.user32.SetWindowPos(
+                        hwnd, -1, 0, 0, 0, 0, 0x0002 | 0x0001
+                    )
+                    ctypes.windll.user32.ShowWindow(hwnd, 3)
+                    ctypes.windll.user32.SwitchToThisWindow(hwnd, True)
+
+                    ctypes.windll.user32.AttachThreadInput(
+                        current_thread, foreground_thread, False
+                    )
+            except Exception:
+                pass
+
+    def start_focus_loop(self):
+        """在弹窗显示期间持续抢焦点（应对全屏应用）"""
+        self._focus_loop_active = True
+        self._focus_loop()
+
+    def _focus_loop(self):
+        if self._focus_loop_active and self.overlay_window and self.overlay_window.winfo_exists():
+            self.force_window_focus()
+            self.overlay_window.after(800, self._focus_loop)
+
+    def stop_focus_loop(self):
+        self._focus_loop_active = False
 
     def handle_key_press(self, event):
         char = event.char
         if char.isdigit():
-            self.typed_code += char
-            if self.typed_code[-4:] == self.current_code:
-                self.hide_overlay()
-                self.is_working_phase = True
-                self.time_left = self.work_duration
-                self.waiting_for_code = False
-                self.update_phase_label()
-                self.time_label.configure(text=self.format_time(self.time_left))
+            # 限制输入长度，防止无限输入
+            if len(self.typed_code) < len(self.current_code):
+                # 立即检查当前输入是否正确
+                expected_char = self.current_code[len(self.typed_code)]
+                if char == expected_char:
+                    # 输入正确，继续
+                    self.typed_code += char
+                    
+                    # 显示输入进度
+                    progress_text = "●" * len(self.typed_code) + "○" * (len(self.current_code) - len(self.typed_code))
+                    self.overlay_time_label.configure(text=f"{self.t('overlay_type_code')}\n{progress_text}", font=self.get_font(30))
+                    
+                    # 检查是否输入完整
+                    if len(self.typed_code) == len(self.current_code):
+                        # 验证码正确，关闭窗口
+                        self.hide_overlay()
+                        self.is_working_phase = True
+                        self.time_left = self.work_duration
+                        self.waiting_for_code = False
+                        self.update_phase_label()
+                        self.time_label.configure(text=self.format_time(self.time_left))
+                else:
+                    # 输入错误，立即报错
+                    self.typed_code = ""
+                    self.overlay_main_label.configure(text=self.current_code, font=self.get_font(100, "bold"))
+                    self.overlay_time_label.configure(text=f"{self.t('overlay_type_code')}\n输入错误！请重新开始输入", font=self.get_font(30))
+                    # 重新聚焦窗口
+                    self.force_window_focus()
+        elif event.keysym == 'BackSpace' and len(self.typed_code) > 0:
+            # 支持退格键删除
+            self.typed_code = self.typed_code[:-1]
+            
+            # 更新显示
+            display_text = self.typed_code + "●" * (len(self.current_code) - len(self.typed_code))
+            self.overlay_main_label.configure(text=display_text, font=self.get_font(100, "bold"))
+            
+            # 更新进度显示
+            progress_text = "●" * len(self.typed_code) + "○" * (len(self.current_code) - len(self.typed_code))
+            self.overlay_time_label.configure(text=f"{self.t('overlay_type_code')}\n{progress_text}", font=self.get_font(30))
 
     def hide_overlay(self):
+        self.stop_focus_loop()
         if self.overlay_window and self.overlay_window.winfo_exists():
             self.overlay_window.destroy()
             self.overlay_window = None
