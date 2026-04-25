@@ -259,7 +259,7 @@ class TimerApp(ctk.CTk):
         self.hotkey_pause = 'ctrl+shift+p'
         self.hotkey_skip = 'ctrl+shift+s'
         self.theme = "Dark"
-        self.font_family = "Microsoft YaHei"
+        self.font_family = "Microsoft YaHei UI"
         self.total_cycles = 0
 
         if os.path.exists(self.settings_file):
@@ -612,8 +612,12 @@ class TimerApp(ctk.CTk):
 
     def _focus_loop(self):
         if self._focus_loop_active and self.overlay_window and self.overlay_window.winfo_exists():
-            self.force_window_focus()
-            self.overlay_window.after(800, self._focus_loop)
+            try:
+                self.force_window_focus()
+                self.overlay_window.after(800, self._focus_loop)
+            except Exception as e:
+                print(f"Focus loop error: {e}")
+                self.stop_focus_loop()
 
     def stop_focus_loop(self):
         self._focus_loop_active = False
