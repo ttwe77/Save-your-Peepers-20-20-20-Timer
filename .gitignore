@@ -159,6 +159,9 @@ Desktop.ini
 # Vim
 *.un~
 
+#Trae
+.trae/
+
 # Setting
 settings.json
 icon.ico
