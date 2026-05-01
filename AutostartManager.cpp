@@ -240,7 +240,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     int scaledWindowHeight = GetScaledSize(240);
     
     HWND hwnd = CreateWindowExW(
-        WS_EX_WINDOWEDGE,
+        WS_EX_WINDOWEDGE | WS_EX_TOPMOST,
         CLASS_NAME,
         L"开机自启动管理器",
         WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX,
