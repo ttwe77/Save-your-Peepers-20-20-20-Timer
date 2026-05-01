@@ -834,13 +834,13 @@ class TimerApp(ctk.CTk):
             self.font_family = font_menu.get()
 
             chosen_pos_text = pos_menu.get()
-            if chosen_pos_text in [TRANSLATIONS["ru"]["pos_br"], TRANSLATIONS["en"]["pos_br"]]:
+            if chosen_pos_text in [TRANSLATIONS["ru"]["pos_br"], TRANSLATIONS["en"]["pos_br"], TRANSLATIONS["zh"]["pos_br"]]:
                 self.warn_position = "pos_br"
-            elif chosen_pos_text in [TRANSLATIONS["ru"]["pos_bl"], TRANSLATIONS["en"]["pos_bl"]]:
+            elif chosen_pos_text in [TRANSLATIONS["ru"]["pos_bl"], TRANSLATIONS["en"]["pos_bl"], TRANSLATIONS["zh"]["pos_bl"]]:
                 self.warn_position = "pos_bl"
-            elif chosen_pos_text in [TRANSLATIONS["ru"]["pos_tr"], TRANSLATIONS["en"]["pos_tr"]]:
+            elif chosen_pos_text in [TRANSLATIONS["ru"]["pos_tr"], TRANSLATIONS["en"]["pos_tr"], TRANSLATIONS["zh"]["pos_tr"]]:
                 self.warn_position = "pos_tr"
-            elif chosen_pos_text in [TRANSLATIONS["ru"]["pos_tl"], TRANSLATIONS["en"]["pos_tl"]]:
+            elif chosen_pos_text in [TRANSLATIONS["ru"]["pos_tl"], TRANSLATIONS["en"]["pos_tl"], TRANSLATIONS["zh"]["pos_tl"]]:
                 self.warn_position = "pos_tl"
 
             time_changed = (new_work != self.work_duration) or (new_rest != self.rest_duration)
