@@ -27,36 +27,15 @@ std::wstring GetSelfDirectory() {
     return L"";
 }
 
-std::wstring FindFirstExeInDirectory(const std::wstring& dir) {
-    WIN32_FIND_DATAW findData;
-    HANDLE hFind = FindFirstFileW((dir + L"\\*.exe").c_str(), &findData);
+std::wstring FindAutostartBat(const std::wstring& dir) {
+    std::wstring batPath = dir + L"\\Autostart.bat";
     
-    if (hFind == INVALID_HANDLE_VALUE) {
-        return L"";
+    DWORD fileAttributes = GetFileAttributesW(batPath.c_str());
+    if (fileAttributes != INVALID_FILE_ATTRIBUTES && !(fileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+        return batPath;
     }
     
-    std::wstring selfName = GetSelfPath();
-    size_t pos = selfName.find_last_of(L'\\');
-    std::wstring selfFileName = selfName.substr(pos + 1);
-    
-    std::vector<std::wstring> exeFiles;
-    
-    do {
-        if (!(findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
-            std::wstring fileName = findData.cFileName;
-            if (_wcsicmp(fileName.c_str(), selfFileName.c_str()) != 0) {
-                exeFiles.push_back(dir + L"\\" + fileName);
-            }
-        }
-    } while (FindNextFileW(hFind, &findData));
-    
-    FindClose(hFind);
-    
-    if (exeFiles.empty()) {
-        return L"";
-    }
-    
-    return exeFiles[0];
+    return L"";
 }
 
 bool IsInAutostart(const std::wstring& appName) {
@@ -178,13 +157,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 scaledButtonWidth, scaledButtonHeight, hwnd, (HMENU)IDC_BUTTON_REMOVE, hInst, NULL);
             
             if (exePath.empty()) {
-                SetWindowTextW(hStaticFileName, L"错误: 未找到可执行文件");
+                SetWindowTextW(hStaticFileName, L"错误: 未找到Autostart.bat文件");
                 SetWindowTextW(hStaticStatus, L"状态: 无法检测");
                 EnableWindow(hBtnAdd, FALSE);
                 EnableWindow(hBtnRemove, FALSE);
             } else {
                 std::wstring fileName = GetFileName(exePath);
-                std::wstring fileText = L"检测到的程序: " + fileName;
+                std::wstring fileText = L"检测到的文件: " + fileName;
                 SetWindowTextW(hStaticFileName, fileText.c_str());
                 
                 bool isInAutostart = IsInAutostart(appName);
@@ -199,7 +178,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             switch (LOWORD(wParam)) {
                 case IDC_BUTTON_ADD: {
                     if (exePath.empty()) {
-                        MessageBoxW(hwnd, L"未找到可执行文件，无法添加", L"错误", MB_OK | MB_ICONERROR);
+                        MessageBoxW(hwnd, L"未找到Autostart.bat文件，无法添加", L"错误", MB_OK | MB_ICONERROR);
                         break;
                     }
                     
@@ -238,10 +217,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     SetProcessDPIAware();
     
     std::wstring dir = GetSelfDirectory();
-    std::wstring exePath = FindFirstExeInDirectory(dir);
+    std::wstring exePath = FindAutostartBat(dir);
     
     if (exePath.empty()) {
-        MessageBoxW(NULL, L"未找到可执行文件", L"错误", MB_OK | MB_ICONERROR);
+        MessageBoxW(NULL, L"未找到Autostart.bat文件", L"错误", MB_OK | MB_ICONERROR);
         return 1;
     }
     
