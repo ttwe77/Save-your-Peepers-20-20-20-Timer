@@ -694,7 +694,6 @@ class TimerApp(ctk.CTk):
         settings_win = ctk.CTkToplevel(self)
         settings_win.title(self.t("set_title"))
         settings_win.geometry("400x500")
-        settings_win.attributes("-topmost", True)
         settings_win.grab_set()
 
         if hasattr(self, 'ico_path') and os.path.exists(self.ico_path):
@@ -859,9 +858,9 @@ class TimerApp(ctk.CTk):
 
             settings_win.destroy()
 
-        btn_save = ctk.CTkButton(settings_win, text=self.t("set_save"), command=save_settings, fg_color="green",
+        btn_save = ctk.CTkButton(scrollable_frame, text=self.t("set_save"), command=save_settings, fg_color="green",
                                  hover_color="darkgreen")
-        btn_save.pack(pady=10)
+        btn_save.pack(pady=20)
 
     def record_hotkey(self, button, attr_name):
         button.configure(text=self.t("set_press_hk"))
