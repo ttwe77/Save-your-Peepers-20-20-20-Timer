@@ -2,7 +2,7 @@
 ; 有关创建 Inno Setup 脚本文件的详细信息，请参阅帮助文档！
 
 #define MyAppName "SaveYourPeepers_PyInstaller"
-#define MyAppVersion "1.0"
+#define MyAppVersion "1.1"
 #define MyAppPublisher "ttwe77"
 #define MyAppURL "https://github.com/ttwe77/Save-your-Peepers-20-20-20-Timer"
 #define MyAppExeName "SaveYourPeepers_PyInstaller_Folder.exe"

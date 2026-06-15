@@ -2,7 +2,7 @@
 ; 有关创建 Inno Setup 脚本文件的详细信息，请参阅帮助文档！
 
 #define MyAppName "SaveYourPeepers_Nuitka"
-#define MyAppVersion "1.0"
+#define MyAppVersion "1.1"
 #define MyAppPublisher "ttwe77"
 #define MyAppURL "https://github.com/ttwe77/Save-your-Peepers-20-20-20-Timer"
 #define MyAppExeName "SaveYourPeepers_Nuitka_Folder.exe"
@@ -111,6 +111,8 @@ Type: files; Name: "{app}\SaveYourPeepers_PyInstaller_Folder.exe"
 Type: files; Name: "{app}\SaveYourPeepers_Nuitka_Folder.exe"
 Type: files; Name: "{app}\icon.ico"
 Type: files; Name: "{app}\AutostartManager.exe"
+Type: files; Name: "{app}\start.bat"
+Type: files; Name: "{app}\Autostart.bat"
 
 ; 如果 settings.json 是程序自动生成的配置文件，可选择是否删除
 ; 选项1：删除它（完全清理）

@@ -167,3 +167,4 @@ settings.json
 icon.ico
 
 bin/
+dist_nuitka/

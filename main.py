@@ -70,6 +70,9 @@ TRANSLATIONS = {
         "pos_bl": "Внизу слева",
         "pos_tr": "Вверху справа",
         "pos_tl": "Вверху слева",
+        "pos_center": "По центру",
+        "pos_top_center": "Вверху по центру",
+        "pos_bottom_center": "Внизу по центру",
         "set_auto_start": "Автозапуск"
     },
     "en": {
@@ -108,6 +111,9 @@ TRANSLATIONS = {
         "pos_bl": "Bottom Left",
         "pos_tr": "Top Right",
         "pos_tl": "Top Left",
+        "pos_center": "Center",
+        "pos_top_center": "Top Center",
+        "pos_bottom_center": "Bottom Center",
         "set_auto_start": "Auto Start"},
     "zh": {
         "title": "守护双眼👁️",
@@ -145,6 +151,9 @@ TRANSLATIONS = {
         "pos_bl": "左下角",
         "pos_tr": "右上角",
         "pos_tl": "左上角",
+        "pos_center": "中间",
+        "pos_top_center": "中上方",
+        "pos_bottom_center": "中下方",
         "set_auto_start": "开机自启动"
     }
 }
@@ -213,6 +222,7 @@ class TimerApp(ctk.CTk):
         self.typed_code = ""
         self.tray_icon = None
         self.last_played_sound = None
+        self._screen_dimension_method = "未初始化"  # 屏幕尺寸获取方法记录
         
         # 创建托盘图标（程序启动时立即显示）
         self.create_tray_icon()
@@ -269,6 +279,8 @@ class TimerApp(ctk.CTk):
         self.total_cycles = 0
         self.auto_start = False
 
+        print(f"[DEBUG] 开始加载设置，默认 warn_position: {self.warn_position}")
+
         if os.path.exists(self.settings_file):
             try:
                 with open(self.settings_file, "r", encoding="utf-8") as f:
@@ -286,8 +298,12 @@ class TimerApp(ctk.CTk):
                     self.font_family = data.get("font_name", self.font_family)
                     self.total_cycles = data.get("total_cycles", self.total_cycles)
                     self.auto_start = data.get("auto_start", self.auto_start)
+                    
+                    print(f"[DEBUG] 从设置文件加载的 warn_position: {self.warn_position}")
             except Exception as e:
                 print(f"Ошибка при загрузке настроек: {e}")
+        else:
+            print(f"[DEBUG] 设置文件不存在，使用默认值: {self.warn_position}")
 
         ctk.set_appearance_mode(self.theme)
         self.font_options = self.get_system_fonts()
@@ -468,6 +484,9 @@ class TimerApp(ctk.CTk):
 
     def show_warning(self):
         if self.warning_window is None or not self.warning_window.winfo_exists():
+            # 调试日志：开始创建警告窗口
+            print(f"[DEBUG] 开始创建警告窗口，位置配置: {self.warn_position}")
+            
             self.warning_window = ctk.CTkToplevel(self)
             self.warning_window.overrideredirect(True)
             self.warning_window.attributes("-topmost", True)
@@ -476,35 +495,166 @@ class TimerApp(ctk.CTk):
             bg_color = "#333333" if ctk.get_appearance_mode() == "Dark" else "#EEEEEE"
             self.warning_window.configure(fg_color=bg_color)
 
-            ww, wh = 160, 50
-            sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
-
-            padding_x = 20
-            padding_y = 60
-
-            if self.warn_position == "pos_br":
-                x = sw - ww - padding_x;
-                y = sh - wh - padding_y
-            elif self.warn_position == "pos_bl":
-                x = padding_x;
-                y = sh - wh - padding_y
-            elif self.warn_position == "pos_tr":
-                x = sw - ww - padding_x;
-                y = padding_x
-            elif self.warn_position == "pos_tl":
-                x = padding_x;
-                y = padding_x
-            else:
-                x = sw - ww - padding_x;
-                y = sh - wh - padding_y
-
-            self.warning_window.geometry(f"{ww}x{wh}+{x}+{y}")
-
+            # 创建标签（必须先创建，才能获取实际尺寸）
             lbl = ctk.CTkLabel(self.warning_window, text=self.t("warning_text"),
                                text_color="#FFB84D", font=self.get_font(14, "bold"))
             lbl.pack(expand=True, fill="both")
 
+            # 强制更新布局，获取窗口实际宽高 - 使用更可靠的方法
+            self.warning_window.update_idletasks()
+            
+            # 方法1: 使用winfo_width/height
+            actual_width1 = self.warning_window.winfo_width()
+            actual_height1 = self.warning_window.winfo_height()
+            
+            # 方法2: 使用winfo_reqwidth/reqheight（请求的尺寸）
+            actual_width2 = self.warning_window.winfo_reqwidth()
+            actual_height2 = self.warning_window.winfo_reqheight()
+            
+            # 方法3: 使用几何信息获取
+            geometry = self.warning_window.geometry()
+            geometry_parts = geometry.split('+')
+            if len(geometry_parts) >= 1:
+                size_part = geometry_parts[0]
+                if 'x' in size_part:
+                    actual_width3, actual_height3 = map(int, size_part.split('x'))
+                else:
+                    actual_width3, actual_height3 = actual_width1, actual_height1
+            else:
+                actual_width3, actual_height3 = actual_width1, actual_height1
+            
+            # 选择最大的尺寸作为实际尺寸（避免窗口太小）
+            actual_width = max(actual_width1, actual_width2, actual_width3, 150)  # 最小150像素
+            actual_height = max(actual_height1, actual_height2, actual_height3, 60)  # 最小60像素
+            
+            print(f"[DEBUG] 窗口尺寸获取方法: winfo={actual_width1}x{actual_height1}, req={actual_width2}x{actual_height2}, geometry={actual_width3}x{actual_height3}")
+            print(f"[DEBUG] 最终窗口尺寸: {actual_width}x{actual_height}")
+
+            # 获取屏幕尺寸 - 使用更可靠的方法
+            sw, sh = self.get_screen_dimensions()
+            padding_x = 60
+            padding_y = 60
+
+            # 调试日志：显示获取的尺寸信息
+            print(f"[DEBUG] 屏幕尺寸: {sw}x{sh}, 窗口尺寸: {actual_width}x{actual_height}")
+            print(f"[DEBUG] 使用屏幕尺寸获取方法: {self._screen_dimension_method}")
+
+            # 根据用户设置的位置计算坐标（使用实际窗口尺寸）
+            if self.warn_position == "pos_br":
+                x = sw - actual_width - padding_x
+                y = sh - actual_height - padding_y
+                print(f"[DEBUG] 右下角位置: x={x}, y={y}")
+            elif self.warn_position == "pos_bl":
+                x = padding_x
+                y = sh - actual_height - padding_y
+                print(f"[DEBUG] 左下角位置: x={x}, y={y}")
+            elif self.warn_position == "pos_tr":
+                x = sw - actual_width - padding_x
+                y = padding_y
+                print(f"[DEBUG] 右上角位置: x={x}, y={y}")
+            elif self.warn_position == "pos_tl":
+                x = padding_x
+                y = padding_y
+                print(f"[DEBUG] 左上角位置: x={x}, y={y}")
+            elif self.warn_position == "pos_center":
+                x = (sw - actual_width) // 2
+                y = (sh - actual_height) // 2
+                print(f"[DEBUG] 中间位置: x={x}, y={y}")
+            elif self.warn_position == "pos_top_center":
+                x = (sw - actual_width) // 2
+                y = padding_y
+                print(f"[DEBUG] 上中位置: x={x}, y={y}")
+            elif self.warn_position == "pos_bottom_center":
+                x = (sw - actual_width) // 2
+                y = sh - actual_height - padding_y
+                print(f"[DEBUG] 下中位置: x={x}, y={y}")
+            else:
+                # 默认右下角
+                x = sw - actual_width - padding_x
+                y = sh - actual_height - padding_y
+                print(f"[DEBUG] 默认右下角位置: x={x}, y={y}")
+
+            # 仅移动窗口到正确位置（保持窗口实际大小不变）
+            position_str = f"+{x}+{y}"
+            print(f"[DEBUG] 设置窗口位置: {position_str}")
+            self.warning_window.geometry(position_str)
+
+            # 淡入显示
             self.fade_warning(0.0, target=0.9, step=0.05)
+            
+            # 最终验证位置
+            self.warning_window.after(100, self._verify_warning_position)
+
+    def get_screen_dimensions(self):
+        """获取屏幕尺寸的多种方法，选择最可靠的一个"""
+        methods = []
+        
+        # 方法1: 使用主窗口获取屏幕尺寸
+        try:
+            sw1 = self.winfo_screenwidth()
+            sh1 = self.winfo_screenheight()
+            methods.append(("主窗口", sw1, sh1))
+        except:
+            pass
+            
+        # 方法2: 使用警告窗口获取屏幕尺寸（原来的方法）
+        try:
+            if self.warning_window and self.warning_window.winfo_exists():
+                sw2 = self.warning_window.winfo_screenwidth()
+                sh2 = self.warning_window.winfo_screenheight()
+                methods.append(("警告窗口", sw2, sh2))
+        except:
+            pass
+            
+        # 方法3: 使用系统API获取屏幕尺寸（最可靠）
+        try:
+            if os.name == 'nt':
+                import ctypes
+                user32 = ctypes.windll.user32
+                sw3 = user32.GetSystemMetrics(0)  # SM_CXSCREEN
+                sh3 = user32.GetSystemMetrics(1)  # SM_CYSCREEN
+                methods.append(("系统API", sw3, sh3))
+        except:
+            pass
+            
+        # 方法4: 使用tkinter的Tk()根窗口获取屏幕尺寸
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+            root.withdraw()  # 隐藏窗口
+            sw4 = root.winfo_screenwidth()
+            sh4 = root.winfo_screenheight()
+            root.destroy()
+            methods.append(("tk根窗口", sw4, sh4))
+        except:
+            pass
+            
+        # 选择最合理的尺寸（通常最大的尺寸是正确的）
+        if methods:
+            # 按面积排序，选择最大的
+            methods.sort(key=lambda x: x[1] * x[2], reverse=True)
+            best_method, best_sw, best_sh = methods[0]
+            
+            # 记录使用的方法
+            self._screen_dimension_method = best_method
+            
+            print(f"[DEBUG] 可用屏幕尺寸方法: {methods}")
+            print(f"[DEBUG] 选择的方法: {best_method}, 尺寸: {best_sw}x{best_sh}")
+            
+            return best_sw, best_sh
+        else:
+            # 回退到默认方法
+            self._screen_dimension_method = "默认"
+            return 1920, 1080  # 常见默认分辨率
+
+    def _verify_warning_position(self):
+        """验证警告窗口的实际位置"""
+        if self.warning_window and self.warning_window.winfo_exists():
+            actual_x = self.warning_window.winfo_x()
+            actual_y = self.warning_window.winfo_y()
+            actual_w = self.warning_window.winfo_width()
+            actual_h = self.warning_window.winfo_height()
+            print(f"[DEBUG] 实际窗口位置: x={actual_x}, y={actual_y}, 尺寸: {actual_w}x{actual_h}")
 
     def fade_warning(self, current_alpha, target, step):
         if self.warning_window and self.warning_window.winfo_exists():
@@ -725,7 +875,7 @@ class TimerApp(ctk.CTk):
             auto_start_btn.configure(text=self.t("set_auto_start"))
             lbl_warn_pos.configure(text=self.t("set_warn_pos"))
 
-            pos_vals = [self.t("pos_br"), self.t("pos_bl"), self.t("pos_tr"), self.t("pos_tl")]
+            pos_vals = [self.t("pos_br"), self.t("pos_bl"), self.t("pos_tr"), self.t("pos_tl"), self.t("pos_center"), self.t("pos_top_center"), self.t("pos_bottom_center")]
             pos_menu.configure(values=pos_vals)
             pos_menu.set(self.t(self.warn_position))
 
@@ -803,7 +953,7 @@ class TimerApp(ctk.CTk):
         lbl_warn_pos = ctk.CTkLabel(pos_frame, text=self.t("set_warn_pos"))
         lbl_warn_pos.pack(side="left", padx=5)
 
-        pos_values = [self.t("pos_br"), self.t("pos_bl"), self.t("pos_tr"), self.t("pos_tl")]
+        pos_values = [self.t("pos_br"), self.t("pos_bl"), self.t("pos_tr"), self.t("pos_tl"), self.t("pos_center"), self.t("pos_top_center"), self.t("pos_bottom_center")]
         pos_menu = ctk.CTkOptionMenu(pos_frame, values=pos_values, width=140)
         pos_menu.set(self.t(self.warn_position))
         pos_menu.pack(side="left")
@@ -842,6 +992,12 @@ class TimerApp(ctk.CTk):
                 self.warn_position = "pos_tr"
             elif chosen_pos_text in [TRANSLATIONS["ru"]["pos_tl"], TRANSLATIONS["en"]["pos_tl"], TRANSLATIONS["zh"]["pos_tl"]]:
                 self.warn_position = "pos_tl"
+            elif chosen_pos_text in [TRANSLATIONS["ru"]["pos_center"], TRANSLATIONS["en"]["pos_center"], TRANSLATIONS["zh"]["pos_center"]]:
+                self.warn_position = "pos_center"
+            elif chosen_pos_text in [TRANSLATIONS["ru"]["pos_top_center"], TRANSLATIONS["en"]["pos_top_center"], TRANSLATIONS["zh"]["pos_top_center"]]:
+                self.warn_position = "pos_top_center"
+            elif chosen_pos_text in [TRANSLATIONS["ru"]["pos_bottom_center"], TRANSLATIONS["en"]["pos_bottom_center"], TRANSLATIONS["zh"]["pos_bottom_center"]]:
+                self.warn_position = "pos_bottom_center"
 
             time_changed = (new_work != self.work_duration) or (new_rest != self.rest_duration)
 
