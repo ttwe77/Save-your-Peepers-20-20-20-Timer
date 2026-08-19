@@ -73,7 +73,11 @@ TRANSLATIONS = {
         "pos_center": "По центру",
         "pos_top_center": "Вверху по центру",
         "pos_bottom_center": "Внизу по центру",
-        "set_auto_start": "Автозапуск"
+        "set_auto_start": "Автозапуск",
+        "btn_rest_now": "Отдохнуть сейчас",
+        "set_overlay_mode": "Режим оверлея:",
+        "overlay_fullscreen": "Полноэкранный",
+        "overlay_securedesktop": "Безопасный рабочий стол"
     },
     "en": {
         "title": "Save Your Peepers 👁️",
@@ -114,7 +118,11 @@ TRANSLATIONS = {
         "pos_center": "Center",
         "pos_top_center": "Top Center",
         "pos_bottom_center": "Bottom Center",
-        "set_auto_start": "Auto Start"},
+        "set_auto_start": "Auto Start",
+        "btn_rest_now": "Rest Now",
+        "set_overlay_mode": "Overlay Mode:",
+        "overlay_fullscreen": "Fullscreen",
+        "overlay_securedesktop": "Secure Desktop"},
     "zh": {
         "title": "守护双眼👁️",
         "focus": "下次提醒",
@@ -154,7 +162,11 @@ TRANSLATIONS = {
         "pos_center": "中间",
         "pos_top_center": "中上方",
         "pos_bottom_center": "中下方",
-        "set_auto_start": "开机自启动"
+        "set_auto_start": "开机自启动",
+        "btn_rest_now": "立即休息",
+        "set_overlay_mode": "弹窗模式：",
+        "overlay_fullscreen": "全屏弹窗",
+        "overlay_securedesktop": "安全桌面"
     }
 }
 
@@ -223,6 +235,7 @@ class TimerApp(ctk.CTk):
         self.tray_icon = None
         self.last_played_sound = None
         self._screen_dimension_method = "未初始化"  # 屏幕尺寸获取方法记录
+        self._securedesktop_running = False
         
         # 创建托盘图标（程序启动时立即显示）
         self.create_tray_icon()
@@ -246,6 +259,10 @@ class TimerApp(ctk.CTk):
         self.skip_button = ctk.CTkButton(self, text=self.t("btn_skip"), command=self.skip_cycle, fg_color="#8B0000",
                                          hover_color="#A52A2A")
         self.skip_button.pack(pady=5)
+
+        self.rest_now_button = ctk.CTkButton(self, text=self.t("btn_rest_now"), command=self.rest_now,
+                                             fg_color="#006400", hover_color="#008000")
+        self.rest_now_button.pack(pady=5)
 
         self.settings_button = ctk.CTkButton(self, text=self.t("btn_settings"), command=self.open_settings,
                                              fg_color="#444444")
@@ -278,6 +295,7 @@ class TimerApp(ctk.CTk):
         self.font_family = "Microsoft YaHei UI"
         self.total_cycles = 0
         self.auto_start = False
+        self.overlay_mode = "fullscreen"
 
         print(f"[DEBUG] 开始加载设置，默认 warn_position: {self.warn_position}")
 
@@ -298,6 +316,7 @@ class TimerApp(ctk.CTk):
                     self.font_family = data.get("font_name", self.font_family)
                     self.total_cycles = data.get("total_cycles", self.total_cycles)
                     self.auto_start = data.get("auto_start", self.auto_start)
+                    self.overlay_mode = data.get("overlay_mode", self.overlay_mode)
                     
                     print(f"[DEBUG] 从设置文件加载的 warn_position: {self.warn_position}")
             except Exception as e:
@@ -333,7 +352,8 @@ class TimerApp(ctk.CTk):
             "theme": ctk.get_appearance_mode(),
             "font_name": self.font_family,
             "total_cycles": self.total_cycles,
-            "auto_start": self.auto_start
+            "auto_start": self.auto_start,
+            "overlay_mode": self.overlay_mode
         }
         try:
             with open(self.settings_file, "w", encoding="utf-8") as f:
@@ -353,7 +373,8 @@ class TimerApp(ctk.CTk):
         return TRANSLATIONS[self.lang][key]
 
     def get_system_fonts(self):
-        fonts = sorted(set(tkfont.families()))
+        # 隐藏带 @ 前缀的字体（这些是 Windows 内部竖排字体，普通场景不适用）
+        fonts = [f for f in sorted(set(tkfont.families())) if not f.startswith('@')]
         preferred = [
             "Microsoft YaHei", "微软雅黑", "SimHei", "黑体", "KaiTi", "楷体", "宋体", "SimSun",
             "NSimSun", "Microsoft JhengHei", "华文细黑", "方正兰亭黑", "PingFang SC"
@@ -391,6 +412,7 @@ class TimerApp(ctk.CTk):
         self.title(self.t("title"))
         self.pause_button.configure(text=self.t("btn_resume") if self.is_paused else self.t("btn_pause"))
         self.skip_button.configure(text=self.t("btn_skip"))
+        self.rest_now_button.configure(text=self.t("btn_rest_now"))
         self.settings_button.configure(text=self.t("btn_settings"))
         self.info_label.configure(text=self.t("info_hotkeys").format(pause=self.hotkey_pause, skip=self.hotkey_skip))
         self.update_cycles_ui()
@@ -428,14 +450,31 @@ class TimerApp(ctk.CTk):
 
     def skip_cycle(self):
         self.play_random_sound()
-        if self.require_code:
+        # 安全桌面模式下，验证码由 securedesktop.exe 处理，无需 Python 层验证
+        if self.require_code and self.overlay_mode != "securedesktop":
             self.waiting_for_code = True
             self.show_unlock_code()
         else:
+            # 安全桌面模式下如果 securedesktop.exe 正在运行，结束它
+            if self.overlay_mode == "securedesktop" and self._securedesktop_running:
+                self._securedesktop_running = False
             self.hide_overlay()
             self.is_working_phase = True
             self.time_left = self.work_duration
             self.update_phase_label()
+
+    def rest_now(self):
+        """立即休息"""
+        if self.is_paused or not self.is_working_phase:
+            return
+        self.hide_warning(instant=False)
+        self.is_working_phase = False
+        self.time_left = self.rest_duration
+        self.update_phase_label()
+        if self.overlay_mode != "securedesktop":
+            self.play_random_sound()
+        if self.use_overlay:
+            self.show_overlay()
 
     def update_phase_label(self):
         if self.is_paused: return
@@ -467,16 +506,22 @@ class TimerApp(ctk.CTk):
                     self.is_working_phase = False
                     self.time_left = self.rest_duration
                     self.update_phase_label()
-                    self.play_random_sound()
+                    if self.overlay_mode != "securedesktop":
+                        self.play_random_sound()
                     if self.use_overlay:
                         self.show_overlay()
                 else:
-                    self.add_successful_cycle()
-                    self.hide_overlay()
-                    self.is_working_phase = True
-                    self.time_left = self.work_duration
-                    self.play_random_sound()
-                    self.update_phase_label()
+                    # 安全桌面模式下，由 securedesktop.exe 控制结束时机
+                    if self.overlay_mode == "securedesktop" and self._securedesktop_running:
+                        pass
+                    else:
+                        self.add_successful_cycle()
+                        self.hide_overlay()
+                        self.is_working_phase = True
+                        self.time_left = self.work_duration
+                        if self.overlay_mode != "securedesktop":
+                            self.play_random_sound()
+                        self.update_phase_label()
 
             self.time_label.configure(text=self.format_time(self.time_left))
 
@@ -679,6 +724,12 @@ class TimerApp(ctk.CTk):
                 self.fade_warning(current_alpha, target=0.0, step=-0.05)
 
     def show_overlay(self):
+        if self.overlay_mode == "securedesktop":
+            self._show_securedesktop()
+            return
+        self._show_fullscreen_overlay()
+
+    def _show_fullscreen_overlay(self):
         if self.overlay_window is None or not self.overlay_window.winfo_exists():
             self.overlay_window = ctk.CTkToplevel(self)
             self.overlay_window.overrideredirect(True)
@@ -702,18 +753,70 @@ class TimerApp(ctk.CTk):
                                                    font=self.get_font(40), text_color=text_color)
             self.overlay_time_label.pack(pady=50)
             self.overlay_window.bind('<Escape>', lambda e: self.skip_cycle())
+            # Alt+F4 绑定到与 ESC 相同的逻辑（修复全屏时按 Alt+F4 报错的问题）
+            self.overlay_window.bind('<Alt-F4>', lambda e: self.skip_cycle())
+            try:
+                # 拦截窗口关闭消息（Alt+F4 触发），重定向到 skip_cycle
+                self.overlay_window.protocol("WM_DELETE_WINDOW", self.skip_cycle)
+            except Exception:
+                pass
+            # 监听窗口可见性/焦点变化，睡眠唤醒或显示器切换时重新校准全屏居中
+            self.overlay_window.bind('<Visibility>', self._refocus_overlay_content)
+            self.overlay_window.bind('<FocusIn>', self._refocus_overlay_content)
+            self.overlay_window.bind('<Map>', self._refocus_overlay_content)
 
             self.fade_in_overlay(0.0)
 
         self.force_window_focus()
         self.start_focus_loop()
 
+    def _show_securedesktop(self):
+        """在安全桌面模式启动休息，运行 securedesktop.exe"""
+        self._securedesktop_running = True
+
+        def run_securedesktop():
+            exe_path = os.path.join(self.base_dir, "securedesktop.exe")
+            if not os.path.exists(exe_path):
+                print("[WARNING] securedesktop.exe 未找到，回退到全屏弹窗")
+                self.after(0, self._show_fullscreen_overlay)
+                return
+
+            self.save_settings_to_file()
+            import subprocess
+            try:
+                subprocess.run([exe_path], shell=True)
+            except Exception as e:
+                print(f"运行 securedesktop.exe 失败: {e}")
+                self.after(0, self._show_fullscreen_overlay)
+                return
+
+            self.after(0, self._on_securedesktop_finished)
+
+        threading.Thread(target=run_securedesktop, daemon=True).start()
+
+    def _on_securedesktop_finished(self):
+        """securedesktop.exe 退出时调用，切换到工作阶段"""
+        self._securedesktop_running = False
+        if not self.is_working_phase:
+            self.add_successful_cycle()
+            self.is_working_phase = True
+            self.time_left = self.work_duration
+            if self.overlay_mode != "securedesktop":
+                self.play_random_sound()
+            self.update_phase_label()
+            self.time_label.configure(text=self.format_time(self.time_left))
+
     def fade_in_overlay(self, current_alpha):
-        if self.overlay_window and self.overlay_window.winfo_exists():
+        if not (self.overlay_window and self.overlay_window.winfo_exists()):
+            return
+        try:
             new_alpha = current_alpha + 0.05
             if new_alpha <= 0.5:
                 self.overlay_window.attributes("-alpha", new_alpha)
                 self.after(30, self.fade_in_overlay, new_alpha)
+        except Exception:
+            # 窗口在淡入过程中被销毁时安全退出
+            pass
 
     def show_unlock_code(self):
         self.current_code = ''.join(random.choices(string.digits, k=4))
@@ -733,46 +836,51 @@ class TimerApp(ctk.CTk):
     
     def force_window_focus(self):
         """强制窗口聚焦到前台（包括从全屏应用抢焦点）"""
-        if self.overlay_window and self.overlay_window.winfo_exists():
+        if not (self.overlay_window and self.overlay_window.winfo_exists()):
+            return
+        try:
             self.overlay_window.deiconify()
             self.overlay_window.lift()
             self.overlay_window.attributes('-topmost', True)
             self.overlay_window.focus_force()
             self.overlay_window.grab_set()
+        except Exception:
+            # 窗口在并发场景下被销毁，直接返回
+            return
 
-            try:
-                if os.name == 'nt':
-                    import ctypes
-                    from ctypes import wintypes
+        try:
+            if os.name == 'nt':
+                import ctypes
+                from ctypes import wintypes
 
-                    hwnd = self.overlay_window.winfo_id()
+                hwnd = self.overlay_window.winfo_id()
 
-                    ctypes.windll.user32.AllowSetForegroundWindow(wintypes.DWORD(-1))
+                ctypes.windll.user32.AllowSetForegroundWindow(wintypes.DWORD(-1))
 
-                    foreground_hwnd = ctypes.windll.user32.GetForegroundWindow()
-                    current_thread = ctypes.windll.kernel32.GetCurrentThreadId()
-                    foreground_thread = ctypes.windll.user32.GetWindowThreadProcessId(
-                        foreground_hwnd, None
-                    )
+                foreground_hwnd = ctypes.windll.user32.GetForegroundWindow()
+                current_thread = ctypes.windll.kernel32.GetCurrentThreadId()
+                foreground_thread = ctypes.windll.user32.GetWindowThreadProcessId(
+                    foreground_hwnd, None
+                )
 
-                    ctypes.windll.user32.AttachThreadInput(
-                        current_thread, foreground_thread, True
-                    )
+                ctypes.windll.user32.AttachThreadInput(
+                    current_thread, foreground_thread, True
+                )
 
-                    ctypes.windll.user32.BringWindowToTop(hwnd)
-                    ctypes.windll.user32.SetForegroundWindow(hwnd)
-                    ctypes.windll.user32.SetActiveWindow(hwnd)
-                    ctypes.windll.user32.SetWindowPos(
-                        hwnd, -1, 0, 0, 0, 0, 0x0002 | 0x0001
-                    )
-                    ctypes.windll.user32.ShowWindow(hwnd, 3)
-                    ctypes.windll.user32.SwitchToThisWindow(hwnd, True)
+                ctypes.windll.user32.BringWindowToTop(hwnd)
+                ctypes.windll.user32.SetForegroundWindow(hwnd)
+                ctypes.windll.user32.SetActiveWindow(hwnd)
+                ctypes.windll.user32.SetWindowPos(
+                    hwnd, -1, 0, 0, 0, 0, 0x0002 | 0x0001
+                )
+                ctypes.windll.user32.ShowWindow(hwnd, 3)
+                ctypes.windll.user32.SwitchToThisWindow(hwnd, True)
 
-                    ctypes.windll.user32.AttachThreadInput(
-                        current_thread, foreground_thread, False
-                    )
-            except Exception:
-                pass
+                ctypes.windll.user32.AttachThreadInput(
+                    current_thread, foreground_thread, False
+                )
+        except Exception:
+            pass
 
     def start_focus_loop(self):
         """在弹窗显示期间持续抢焦点（应对全屏应用）"""
@@ -783,10 +891,42 @@ class TimerApp(ctk.CTk):
         if self._focus_loop_active and self.overlay_window and self.overlay_window.winfo_exists():
             try:
                 self.force_window_focus()
+                # 定期检查屏幕尺寸，关闭显示器/睡眠唤醒后自动重置全屏并重新居中
+                self._ensure_overlay_fullscreen()
                 self.overlay_window.after(800, self._focus_loop)
             except Exception as e:
                 print(f"Focus loop error: {e}")
                 self.stop_focus_loop()
+
+    def _ensure_overlay_fullscreen(self):
+        """确保遮罩层覆盖整个屏幕并让内容重新居中（修复关闭显示器/睡眠唤醒后文字未居中）"""
+        if not (self.overlay_window and self.overlay_window.winfo_exists()):
+            return
+        try:
+            sw = self.overlay_window.winfo_screenwidth()
+            sh = self.overlay_window.winfo_screenheight()
+            # 屏幕尺寸异常（显示器关闭/睡眠中）时跳过
+            if sw <= 0 or sh <= 0:
+                return
+            current_w = self.overlay_window.winfo_width()
+            current_h = self.overlay_window.winfo_height()
+            cur_x = self.overlay_window.winfo_x()
+            cur_y = self.overlay_window.winfo_y()
+            # 当窗口尺寸或位置与屏幕不一致时（例如睡眠唤醒后多屏配置变化），强制重置
+            if current_w != sw or current_h != sh or cur_x != 0 or cur_y != 0:
+                self.overlay_window.geometry(f"{sw}x{sh}+0+0")
+                # 强制 pack 重新计算居中
+                self.overlay_window.update_idletasks()
+        except Exception:
+            pass
+
+    def _refocus_overlay_content(self, event=None):
+        """窗口获得焦点/可见性变化时，重新校准全屏尺寸以保证文字居中"""
+        if self.overlay_window and self.overlay_window.winfo_exists():
+            try:
+                self._ensure_overlay_fullscreen()
+            except Exception:
+                pass
 
     def stop_focus_loop(self):
         self._focus_loop_active = False
@@ -870,6 +1010,12 @@ class TimerApp(ctk.CTk):
             lbl_work.configure(text=self.t("set_work"))
             lbl_rest.configure(text=self.t("set_rest"))
             overlay_switch.configure(text=self.t("set_overlay"))
+            lbl_overlay_mode.configure(text=self.t("set_overlay_mode"))
+            overlay_mode_menu.configure(values=[self.t("overlay_fullscreen"), self.t("overlay_securedesktop")])
+            if self.overlay_mode == "securedesktop":
+                overlay_mode_menu.set(self.t("overlay_securedesktop"))
+            else:
+                overlay_mode_menu.set(self.t("overlay_fullscreen"))
             code_switch.configure(text=self.t("set_code"))
             warning_switch.configure(text=self.t("set_warning"))
             auto_start_btn.configure(text=self.t("set_auto_start"))
@@ -937,6 +1083,19 @@ class TimerApp(ctk.CTk):
         overlay_switch.select() if self.use_overlay else overlay_switch.deselect()
         overlay_switch.pack(anchor="w", pady=5)
 
+        overlay_mode_frame = ctk.CTkFrame(switch_frame, fg_color="transparent")
+        overlay_mode_frame.pack(fill="x", pady=2)
+        lbl_overlay_mode = ctk.CTkLabel(overlay_mode_frame, text=self.t("set_overlay_mode"))
+        lbl_overlay_mode.pack(side="left", padx=5)
+        overlay_mode_menu = ctk.CTkOptionMenu(overlay_mode_frame, values=[
+            self.t("overlay_fullscreen"), self.t("overlay_securedesktop")
+        ], width=140)
+        if self.overlay_mode == "securedesktop":
+            overlay_mode_menu.set(self.t("overlay_securedesktop"))
+        else:
+            overlay_mode_menu.set(self.t("overlay_fullscreen"))
+        overlay_mode_menu.pack(side="left")
+
         code_switch = ctk.CTkSwitch(switch_frame, text=self.t("set_code"))
         code_switch.select() if self.require_code else code_switch.deselect()
         code_switch.pack(anchor="w", pady=5)
@@ -982,6 +1141,12 @@ class TimerApp(ctk.CTk):
             self.require_code = code_switch.get() == 1
             self.use_warning = warning_switch.get() == 1
             self.font_family = font_menu.get()
+
+            chosen_overlay_mode = overlay_mode_menu.get()
+            if chosen_overlay_mode == self.t("overlay_securedesktop"):
+                self.overlay_mode = "securedesktop"
+            else:
+                self.overlay_mode = "fullscreen"
 
             chosen_pos_text = pos_menu.get()
             if chosen_pos_text in [TRANSLATIONS["ru"]["pos_br"], TRANSLATIONS["en"]["pos_br"], TRANSLATIONS["zh"]["pos_br"]]:
