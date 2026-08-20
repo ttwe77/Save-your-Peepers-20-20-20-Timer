@@ -1,7 +1,7 @@
 // securedesktop.cpp — 安全桌面版（多语言支持 + 壁纸背景 + 独立提示窗口 + 随机音频播放）
 // 编译:
 // windres resource.rc -O coff -o resource.res
-// g++ -o securedesktop.exe securedesktop.cpp resource.res -lgdi32 -lgdiplus -luser32 -lshcore -lwinmm -static -mwindows -O2 -s
+// g++ -o Settings.exe settings.cpp resource.res -lcomctl32 -lgdi32 -luser32 -ladvapi32 -lshlwapi -static -municode -mwindows -O2 -lcomdlg32
 
 #define UNICODE
 #define _UNICODE

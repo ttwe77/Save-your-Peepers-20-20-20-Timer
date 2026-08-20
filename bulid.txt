@@ -5,6 +5,6 @@ pyinstaller --onefile --windowed --name "SaveYourPeepers_PyInstaller_OneFile" --
 pyinstaller --onedir --windowed --name "SaveYourPeepers_PyInstaller_Folder" --icon="icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --add-data "sounds;sounds" --hidden-import PIL._tkinter_finder --hidden-import customtkinter --distpath "dist_folder" --workpath "build_folder" main.py
 
 3. Nuitka 文件夹模式（一行命令）
-nuitka --standalone --windows-disable-console --enable-plugin=tk-inter --output-filename=SaveYourPeepers_Nuitka_Folder.exe --windows-icon-from-ico=icon.ico --include-data-file=icon.ico=icon.ico --include-data-file=icon.png=icon.png --include-data-dir=sounds=sounds --include-module=PIL._tkinter_finder --include-module=customtkinter --output-dir=dist_nuitka main.py
+nuitka --standalone --windows-disable-console --mingw64 --enable-plugin=tk-inter --output-filename=SaveYourPeepers_Nuitka_Folder.exe --windows-icon-from-ico=icon.ico --include-data-file=icon.ico=icon.ico --include-data-file=icon.png=icon.png --include-data-dir=sounds=sounds --include-module=PIL._tkinter_finder --include-module=customtkinter --output-dir=dist_nuitka main.py
 
 g++ -static -o AutostartManager.exe AutostartManager.cpp -lshlwapi -mwindows
