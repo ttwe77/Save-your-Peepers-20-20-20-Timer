@@ -1,12 +1,13 @@
 // securedesktop.cpp — 安全桌面版（多语言支持 + 壁纸背景 + 独立提示窗口 + 随机音频播放）
 // 编译:
 // windres resource.rc -O coff -o resource.res
-// g++ -o Settings.exe settings.cpp resource.res -lcomctl32 -lgdi32 -luser32 -ladvapi32 -lshlwapi -static -municode -mwindows -O2 -lcomdlg32
+// g++ -o securedesktop.exe securedesktop.cpp resource.res -lcomctl32 -lgdi32 -luser32 -ladvapi32 -lshlwapi -lcomdlg32 -lgdiplus -lwinmm -static -mwindows -O2 -ldwmapi
 
 #define UNICODE
 #define _UNICODE
 
 #include <windows.h>
+#include <dwmapi.h>   // 需要链接 dwmapi.lib
 #include <shellscalingapi.h>
 #include <gdiplus.h>
 #include <string>
@@ -25,6 +26,11 @@
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "shcore.lib")
 #pragma comment(lib, "winmm.lib")
+#pragma comment(lib, "dwmapi.lib")
+
+#ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
+#define DWMWA_USE_IMMERSIVE_DARK_MODE 20   // Windows 10 20H1+；旧系统可改为 19
+#endif
 
 using namespace Gdiplus;
 
@@ -52,6 +58,11 @@ static bool      g_hasWallpaper = false;
 // 音频相关
 static std::wstring g_lastPlayedSound;
 static bool         g_hasLastPlayed = false;
+
+// 深色模式颜色
+static HBRUSH  g_hDarkBrush = nullptr;
+static COLORREF g_darkBg   = RGB(32, 32, 32);
+static COLORREF g_darkText = RGB(240, 240, 240);
 
 // ---------- 多语言相关 ----------
 static std::wstring g_lang = L"zh";
@@ -438,11 +449,13 @@ LRESULT CALLBACK PromptWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
     }
 
     case WM_CTLCOLORSTATIC:
-    case WM_CTLCOLOREDIT: {
-        SetBkMode((HDC)wParam, OPAQUE);
-        SetBkColor((HDC)wParam, RGB(255, 255, 255));
-        SetTextColor((HDC)wParam, RGB(0, 0, 0));
-        return (LRESULT)GetStockObject(WHITE_BRUSH);
+    case WM_CTLCOLOREDIT:
+    case WM_CTLCOLORBTN: {
+        HDC hdc = (HDC)wParam;
+        SetBkMode(hdc, OPAQUE);
+        SetBkColor(hdc, g_darkBg);
+        SetTextColor(hdc, g_darkText);
+        return (LRESULT)g_hDarkBrush;
     }
 
     case WM_TIMER:
@@ -533,7 +546,7 @@ void CreateWindows(HINSTANCE hInstance) {
     wcPrompt.lpfnWndProc   = PromptWndProc;
     wcPrompt.hInstance     = hInstance;
     wcPrompt.hCursor       = LoadCursor(nullptr, IDC_ARROW);
-    wcPrompt.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
+    wcPrompt.hbrBackground = g_hDarkBrush;   // 深色背景画刷
     wcPrompt.lpszClassName = PROMPT_CLASS;
     wcPrompt.hIcon = LoadIconW(hInstance, L"MAINICON");
     RegisterClassW(&wcPrompt);
@@ -577,6 +590,11 @@ void CreateWindows(HINSTANCE hInstance) {
         throw std::runtime_error("创建提示窗口失败");
     }
 
+    // ===== 新增：启用深色标题栏 =====
+    BOOL darkMode = TRUE;
+    DwmSetWindowAttribute(g_hPromptWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &darkMode, sizeof(darkMode));
+    // ===============================
+
     ShowWindow(g_hBgWnd, SW_SHOW);
     UpdateWindow(g_hBgWnd);
     ShowWindow(g_hPromptWnd, SW_SHOW);
@@ -619,6 +637,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     }
 
     LoadWallpaper();
+    
+    // 创建深色画刷
+    g_hDarkBrush = CreateSolidBrush(g_darkBg);
 
     try {
         CreateWindows(hInstance);
@@ -645,6 +666,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     if (g_hBgWnd) {
         DestroyWindow(g_hBgWnd);
         g_hBgWnd = nullptr;
+    }
+    if (g_hDarkBrush) {
+        DeleteObject(g_hDarkBrush);
+        g_hDarkBrush = nullptr;
     }
 
     RestoreDesktop();
