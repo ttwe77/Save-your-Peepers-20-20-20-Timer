@@ -3,6 +3,7 @@ import customtkinter as ctk
 import keyboard
 import pygame
 import os
+import subprocess
 import sys
 import random
 import string
@@ -226,16 +227,12 @@ class TimerApp(ctk.CTk):
         self.is_working_phase = True
         self.time_left = self.work_duration
 
-        self.overlay_window = None
         self.warning_window = None
-        self.waiting_for_code = False
-        self._focus_loop_active = False
-        self.current_code = ""
-        self.typed_code = ""
+        self._screen_dimension_method = "未初始化"  # 供警告窗口计算位置
+
         self.tray_icon = None
         self.last_played_sound = None
-        self._screen_dimension_method = "未初始化"  # 屏幕尺寸获取方法记录
-        self._securedesktop_running = False
+        self.overlay_process = None  # 替换 _securedesktop_running，用于跟踪外部进程
         
         # 创建托盘图标（程序启动时立即显示）
         self.create_tray_icon()
@@ -399,10 +396,7 @@ class TimerApp(ctk.CTk):
         except Exception:
             pass
 
-        if self.overlay_window and self.overlay_window.winfo_exists():
-            self.overlay_main_label.configure(font=self.get_font(60, "bold"))
-            self.overlay_time_label.configure(font=self.get_font(40))
-
+        # 保留警告窗口字体更新
         if self.warning_window and self.warning_window.winfo_exists():
             for child in self.warning_window.winfo_children():
                 if isinstance(child, ctk.CTkLabel):
@@ -450,31 +444,25 @@ class TimerApp(ctk.CTk):
 
     def skip_cycle(self):
         self.play_random_sound()
-        # 安全桌面模式下，验证码由 securedesktop.exe 处理，无需 Python 层验证
-        if self.require_code and self.overlay_mode != "securedesktop":
-            self.waiting_for_code = True
-            self.show_unlock_code()
-        else:
-            # 安全桌面模式下如果 securedesktop.exe 正在运行，结束它
-            if self.overlay_mode == "securedesktop" and self._securedesktop_running:
-                self._securedesktop_running = False
-            self.hide_overlay()
-            self.is_working_phase = True
-            self.time_left = self.work_duration
-            self.update_phase_label()
+        # 强制结束外部进程（如果有）
+        if self.overlay_process and self.overlay_process.poll() is None:
+            self.overlay_process.terminate()  # 或 kill
+            self.overlay_process = None
+        # 直接回到工作状态
+        self.is_working_phase = True
+        self.time_left = self.work_duration
+        self.update_phase_label()
 
     def rest_now(self):
         """立即休息"""
         if self.is_paused or not self.is_working_phase:
             return
-        self.hide_warning(instant=False)
+        self.hide_warning(instant=False)  # 隐藏可能存在的 10 秒警告
         self.is_working_phase = False
         self.time_left = self.rest_duration
         self.update_phase_label()
-        if self.overlay_mode != "securedesktop":
-            self.play_random_sound()
-        if self.use_overlay:
-            self.show_overlay()
+        # self.play_random_sound()  # 立刻休息不播放声音
+        self.start_external_overlay()  # 启动外部程序
 
     def update_phase_label(self):
         if self.is_paused: return
@@ -489,41 +477,53 @@ class TimerApp(ctk.CTk):
         return f"{mins:02d}:{secs:02d}"
 
     def update_timer(self):
-        if not self.is_paused and not self.waiting_for_code:
+        if not self.is_paused:  # 删除 waiting_for_code 条件
             if self.time_left > 0:
                 self.time_left -= 1
 
+                # ===== 保留：提前 10 秒警告 =====
                 if self.is_working_phase and self.use_warning and self.time_left == 10:
                     self.play_random_sound()
                     self.show_warning()
 
-                if not self.is_working_phase and self.overlay_window:
-                    self.overlay_time_label.configure(text=self.t("overlay_time").format(time=self.time_left))
-            else:
-                self.hide_warning(instant=False)
+                # 倒计时归零
+                if not self.is_working_phase:
+                    # 程序还在运行，等待（不归零，不切换）
+                    if self.overlay_process and self.overlay_process.poll() is None:
+                        pass
+                    else:
+                        # 程序已退出，回到工作
+                        self.overlay_process = None
+                        self.add_successful_cycle()
+                        self.is_working_phase = True
+                        self.time_left = self.work_duration
+                        # self.play_random_sound()  # 休息结束不播放声音
+                        self.update_phase_label()
+                        self.time_label.configure(text=self.format_time(self.time_left))
 
+                self.time_label.configure(text=self.format_time(self.time_left))
+
+            else:
+                # 工作结束 -> 进入休息，启动外部程序
                 if self.is_working_phase:
                     self.is_working_phase = False
                     self.time_left = self.rest_duration
                     self.update_phase_label()
-                    if self.overlay_mode != "securedesktop":
-                        self.play_random_sound()
-                    if self.use_overlay:
-                        self.show_overlay()
+                    # self.play_random_sound()  # 休息开始不播放声音
+                    self.start_external_overlay()  # 启动 overlay.exe / securedesktop.exe
+                    self.time_label.configure(text=self.format_time(self.time_left))
                 else:
-                    # 安全桌面模式下，由 securedesktop.exe 控制结束时机
-                    if self.overlay_mode == "securedesktop" and self._securedesktop_running:
+                    # 休息结束 -> 检查外部程序是否已退出
+                    if self.overlay_process and self.overlay_process.poll() is None:
                         pass
                     else:
+                        self.overlay_process = None
                         self.add_successful_cycle()
-                        self.hide_overlay()
                         self.is_working_phase = True
                         self.time_left = self.work_duration
-                        if self.overlay_mode != "securedesktop":
-                            self.play_random_sound()
+                        # self.play_random_sound()  # 休息结束不播放声音
                         self.update_phase_label()
-
-            self.time_label.configure(text=self.format_time(self.time_left))
+                        self.time_label.configure(text=self.format_time(self.time_left))
 
         self.after(1000, self.update_timer)
 
@@ -806,6 +806,17 @@ class TimerApp(ctk.CTk):
             self.update_phase_label()
             self.time_label.configure(text=self.format_time(self.time_left))
 
+    def start_external_overlay(self):
+        """启动外部进程（overlay.exe 或 securedesktop.exe）"""
+        exe_name = "securedesktop.exe" if self.overlay_mode == "securedesktop" else "overlay.exe"
+        exe_path = os.path.join(self.base_dir, exe_name)
+        if not os.path.exists(exe_path):
+            # 回退
+            exe_path = os.path.join(self.base_dir, "overlay.exe")
+            if not os.path.exists(exe_path):
+                return
+        self.overlay_process = subprocess.Popen([exe_path], shell=False)
+
     def fade_in_overlay(self, current_alpha):
         if not (self.overlay_window and self.overlay_window.winfo_exists()):
             return
@@ -818,171 +829,7 @@ class TimerApp(ctk.CTk):
             # 窗口在淡入过程中被销毁时安全退出
             pass
 
-    def show_unlock_code(self):
-        self.current_code = ''.join(random.choices(string.digits, k=4))
-        self.typed_code = ""
-        
-        if self.overlay_window is None or not self.overlay_window.winfo_exists():
-            self.show_overlay()
-            self.overlay_window.attributes("-alpha", 0.5)
-        else:
-            self.start_focus_loop()
-        
-        self.overlay_main_label.configure(text=f"{self.current_code}", font=self.get_font(100, "bold"), text_color="white")
-        self.overlay_time_label.configure(text=self.t("overlay_type_code"), font=self.get_font(30))
-        self.overlay_window.bind('<Key>', self.handle_key_press)
-        
-        self.force_window_focus()
-    
-    def force_window_focus(self):
-        """强制窗口聚焦到前台（包括从全屏应用抢焦点）"""
-        if not (self.overlay_window and self.overlay_window.winfo_exists()):
-            return
-        try:
-            self.overlay_window.deiconify()
-            self.overlay_window.lift()
-            self.overlay_window.attributes('-topmost', True)
-            self.overlay_window.focus_force()
-            self.overlay_window.grab_set()
-        except Exception:
-            # 窗口在并发场景下被销毁，直接返回
-            return
-
-        try:
-            if os.name == 'nt':
-                import ctypes
-                from ctypes import wintypes
-
-                hwnd = self.overlay_window.winfo_id()
-
-                ctypes.windll.user32.AllowSetForegroundWindow(wintypes.DWORD(-1))
-
-                foreground_hwnd = ctypes.windll.user32.GetForegroundWindow()
-                current_thread = ctypes.windll.kernel32.GetCurrentThreadId()
-                foreground_thread = ctypes.windll.user32.GetWindowThreadProcessId(
-                    foreground_hwnd, None
-                )
-
-                ctypes.windll.user32.AttachThreadInput(
-                    current_thread, foreground_thread, True
-                )
-
-                ctypes.windll.user32.BringWindowToTop(hwnd)
-                ctypes.windll.user32.SetForegroundWindow(hwnd)
-                ctypes.windll.user32.SetActiveWindow(hwnd)
-                ctypes.windll.user32.SetWindowPos(
-                    hwnd, -1, 0, 0, 0, 0, 0x0002 | 0x0001
-                )
-                ctypes.windll.user32.ShowWindow(hwnd, 3)
-                ctypes.windll.user32.SwitchToThisWindow(hwnd, True)
-
-                ctypes.windll.user32.AttachThreadInput(
-                    current_thread, foreground_thread, False
-                )
-        except Exception:
-            pass
-
-    def start_focus_loop(self):
-        """在弹窗显示期间持续抢焦点（应对全屏应用）"""
-        self._focus_loop_active = True
-        self._focus_loop()
-
-    def _focus_loop(self):
-        if self._focus_loop_active and self.overlay_window and self.overlay_window.winfo_exists():
-            try:
-                self.force_window_focus()
-                # 定期检查屏幕尺寸，关闭显示器/睡眠唤醒后自动重置全屏并重新居中
-                self._ensure_overlay_fullscreen()
-                self.overlay_window.after(800, self._focus_loop)
-            except Exception as e:
-                print(f"Focus loop error: {e}")
-                self.stop_focus_loop()
-
-    def _ensure_overlay_fullscreen(self):
-        """确保遮罩层覆盖整个屏幕并让内容重新居中（修复关闭显示器/睡眠唤醒后文字未居中）"""
-        if not (self.overlay_window and self.overlay_window.winfo_exists()):
-            return
-        try:
-            sw = self.overlay_window.winfo_screenwidth()
-            sh = self.overlay_window.winfo_screenheight()
-            # 屏幕尺寸异常（显示器关闭/睡眠中）时跳过
-            if sw <= 0 or sh <= 0:
-                return
-            current_w = self.overlay_window.winfo_width()
-            current_h = self.overlay_window.winfo_height()
-            cur_x = self.overlay_window.winfo_x()
-            cur_y = self.overlay_window.winfo_y()
-            # 当窗口尺寸或位置与屏幕不一致时（例如睡眠唤醒后多屏配置变化），强制重置
-            if current_w != sw or current_h != sh or cur_x != 0 or cur_y != 0:
-                self.overlay_window.geometry(f"{sw}x{sh}+0+0")
-                # 强制 pack 重新计算居中
-                self.overlay_window.update_idletasks()
-        except Exception:
-            pass
-
-    def _refocus_overlay_content(self, event=None):
-        """窗口获得焦点/可见性变化时，重新校准全屏尺寸以保证文字居中"""
-        if self.overlay_window and self.overlay_window.winfo_exists():
-            try:
-                self._ensure_overlay_fullscreen()
-            except Exception:
-                pass
-
-    def stop_focus_loop(self):
-        self._focus_loop_active = False
-
-    def handle_key_press(self, event):
-        char = event.char
-        if char.isdigit():
-            # 限制输入长度，防止无限输入
-            if len(self.typed_code) < len(self.current_code):
-                # 立即检查当前输入是否正确
-                expected_char = self.current_code[len(self.typed_code)]
-                if char == expected_char:
-                    # 输入正确，继续
-                    self.typed_code += char
-                    
-                    # 显示输入进度
-                    progress_text = "●" * len(self.typed_code) + "○" * (len(self.current_code) - len(self.typed_code))
-                    self.overlay_time_label.configure(text=f"{self.t('overlay_type_code')}\n{progress_text}", font=self.get_font(30))
-                    
-                    # 检查是否输入完整
-                    if len(self.typed_code) == len(self.current_code):
-                        # 验证码正确，关闭窗口
-                        self.hide_overlay()
-                        self.is_working_phase = True
-                        self.time_left = self.work_duration
-                        self.waiting_for_code = False
-                        self.update_phase_label()
-                        self.time_label.configure(text=self.format_time(self.time_left))
-                else:
-                    # 输入错误，立即报错
-                    self.typed_code = ""
-                    self.overlay_main_label.configure(text=self.current_code, font=self.get_font(100, "bold"))
-                    self.overlay_time_label.configure(text=f"{self.t('overlay_type_code')}\n输入错误！请重新开始输入", font=self.get_font(30))
-                    # 重新聚焦窗口
-                    self.force_window_focus()
-        elif event.keysym == 'BackSpace' and len(self.typed_code) > 0:
-            # 支持退格键删除
-            self.typed_code = self.typed_code[:-1]
-            
-            # 更新显示
-            display_text = self.typed_code + "●" * (len(self.current_code) - len(self.typed_code))
-            self.overlay_main_label.configure(text=display_text, font=self.get_font(100, "bold"))
-            
-            # 更新进度显示
-            progress_text = "●" * len(self.typed_code) + "○" * (len(self.current_code) - len(self.typed_code))
-            self.overlay_time_label.configure(text=f"{self.t('overlay_type_code')}\n{progress_text}", font=self.get_font(30))
-
-    def hide_overlay(self):
-        self.stop_focus_loop()
-        if self.overlay_window and self.overlay_window.winfo_exists():
-            self.overlay_window.destroy()
-            self.overlay_window = None
-
     def open_settings(self):
-        import subprocess
-        import os
         from tkinter import messagebox
 
         settings_exe = os.path.join(self.base_dir, "Settings.exe")

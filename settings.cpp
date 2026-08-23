@@ -15,6 +15,7 @@
 #include <cstdlib>
 #include <map>
 #include <algorithm>
+#include <set>
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "shlwapi.lib")
@@ -644,12 +645,20 @@ bool SaveSettings() {
 
 void SetAutoStart(bool enable) {
     HKEY hKey;
-    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_SET_VALUE, &hKey) != ERROR_SUCCESS)
+    if (RegOpenKeyExW(HKEY_CURRENT_USER,
+                      L"Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+                      0, KEY_SET_VALUE, &hKey) != ERROR_SUCCESS)
         return;
+
     if (enable) {
         wchar_t exePath[MAX_PATH];
-        GetModuleFileNameW(NULL, exePath, MAX_PATH);
-        RegSetValueExW(hKey, L"20-20-20", 0, REG_SZ, (BYTE*)exePath, (wcslen(exePath) + 1) * sizeof(wchar_t));
+        GetModuleFileNameW(NULL, exePath, MAX_PATH);          // 当前 settings.exe 完整路径
+        PathRemoveFileSpecW(exePath);                         // 去掉文件名，只剩目录
+        PathAppendW(exePath, L"SaveYourPeepersCPP.exe");      // 拼接目标主程序名
+
+        RegSetValueExW(hKey, L"20-20-20", 0, REG_SZ,
+                       (BYTE*)exePath,
+                       (wcslen(exePath) + 1) * sizeof(wchar_t));
     } else {
         RegDeleteValueW(hKey, L"20-20-20");
     }
@@ -1041,16 +1050,99 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 GetWindowTextW(g_hHkSkip, hkBuf, 64);
                 g_settings.hotkey_skip = hkBuf;
 
-                // 简单验证热键格式
                 auto IsValidHotkey = [](const std::wstring& hk) -> bool {
-                    if (hk.empty()) return false;
-                    return (hk.find(L"ctrl+")  != std::wstring::npos ||
-                            hk.find(L"shift+") != std::wstring::npos ||
-                            hk.find(L"alt+")   != std::wstring::npos);
-                };
+    if (hk.empty()) return false;
+
+    // 1. 去除首尾空白字符（防呆）
+    std::wstring trimmed = hk;
+    size_t start = trimmed.find_first_not_of(L" \t\r\n");
+    if (start == std::wstring::npos) return false;
+    size_t end = trimmed.find_last_not_of(L" \t\r\n");
+    trimmed = trimmed.substr(start, end - start + 1);
+
+    // 2. 统一转为小写便于比较
+    std::wstring lower = trimmed;
+    std::transform(lower.begin(), lower.end(), lower.begin(), ::towlower);
+
+    // 3. 按 '+' 分割，并杜绝连续 '+' 或首尾 '+' 等异常
+    std::vector<std::wstring> parts;
+    std::wstring part;
+    for (wchar_t ch : lower) {
+        if (ch == L'+') {
+            if (part.empty()) return false; // 出现 "++" 或开头结尾的 '+'
+            parts.push_back(part);
+            part.clear();
+        } else {
+            part.push_back(ch);
+        }
+    }
+    if (part.empty()) return false; // 以 '+' 结尾
+    parts.push_back(part);
+
+    // 必须至少有一个修饰键和一个键名
+    if (parts.size() < 2) return false;
+
+    // 4. 检查所有前面的部分是否都是合法的修饰键（白名单）
+    const std::set<std::wstring> validMods = { L"ctrl", L"shift", L"alt" };
+    for (size_t i = 0; i < parts.size() - 1; ++i) {
+        if (validMods.find(parts[i]) == validMods.end()) {
+            return false; // 例如 "1ctrl" 或 "abc" 都会在这里被拦截
+        }
+    }
+
+    // 5. 校验最后一部分（键名）
+    std::wstring key = parts.back();
+
+    // 5.1 单字符键：允许任意字母、数字或常见符号（如 '-', '=', '[' 等）
+    if (key.size() == 1) {
+        return true;
+    }
+
+    // 5.2 功能键 F1 ~ F24
+    if (key[0] == L'f' && key.size() > 1) {
+        bool allDigits = true;
+        for (size_t i = 1; i < key.size(); ++i) {
+            if (!iswdigit(key[i])) { allDigits = false; break; }
+        }
+        if (allDigits) {
+            int num = std::stoi(key.substr(1));
+            if (num >= 1 && num <= 24) return true;
+        }
+    }
+
+    // 5.3 常用特殊键白名单（与 GetKeyNameText 返回值保持一致）
+    const std::set<std::wstring> specialKeys = {
+        // 导航与编辑
+        L"home", L"end", L"pgup", L"pgdn", L"insert", L"delete",
+        // 方向键
+        L"up", L"down", L"left", L"right",
+        // 控制与符号
+        L"space", L"tab", L"enter", L"escape", L"esc",
+        L"backspace", L"back",
+        // 系统与状态
+        L"printscreen", L"pause", L"break",
+        L"numlock", L"capslock", L"scrolllock",
+        // 数字键盘
+        L"add", L"subtract", L"multiply", L"divide", L"decimal",
+        // Windows 键（若用户捕获得到，予以放行）
+        L"apps", L"lwin", L"rwin", L"win"
+    };
+    if (specialKeys.find(key) != specialKeys.end()) {
+        return true;
+    }
+
+    // 5.4 兼容 OEM 键（如 OemMinus, OemPeriod）和 Numpad 键（如 Num 1）
+    if (key.find(L"oem") != std::wstring::npos ||
+        key.find(L"num") != std::wstring::npos) {
+        return true;
+    }
+
+    // 以上均不匹配，视为无效
+    return false;
+};
 
                 if (!IsValidHotkey(g_settings.hotkey_pause) || !IsValidHotkey(g_settings.hotkey_skip)) {
-                    MessageBoxW(hWnd, L"热键格式无效，请使用 L" L"\u4e0d" L"按钮重新选择。",
+                    MessageBoxW(hWnd, L"热键格式无效，请使用“选择”按钮重新选择。",
                                 L"错误", MB_OK | MB_ICONWARNING);
                     return 0;
                 }
@@ -1308,7 +1400,7 @@ wc.hIcon = LoadIconW(hInstance, L"MAINICON");
 // 小图标通常与大图标相同
 wc.hIconSm = wc.hIcon;
 // 若加载失败，可回退到默认图标（可选）
-if (!wc.hIcon) wc.hIcon = LoadIconW(NULL, IDI_APPLICATION);
+if (!wc.hIcon) wc.hIcon = LoadIconW(NULL, L"IDI_APPLICATION");
 wc.hbrBackground = NULL;
 wc.lpszClassName = L"SettingsWindowClass";
 if (!RegisterClassExW(&wc)) return 0;

@@ -1,3 +1,3 @@
-taskkill /f /im Overlay.exe
-g++ -std=c++17 -mwindows Overlay.cpp -o Overlay.exe -lgdi32 -luser32 -lkernel32 -lwinmm -static -municode -mwindows -O2
-Overlay.exe
+taskkill /f /im SaveYourPeepersCPP.exe
+g++ -std=c++17 -o SaveYourPeepersCPP.exe SaveYourPeepersCPP.cpp -luser32 -lgdi32 -lcomctl32 -lshell32 -lole32 -ladvapi32 -ldwmapi -static -mwindows -O2
+SaveYourPeepersCPP.exe

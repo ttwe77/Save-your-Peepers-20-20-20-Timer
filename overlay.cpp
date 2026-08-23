@@ -186,28 +186,32 @@ bool PlayRandomSound(bool waitForFinish) {
     g_lastPlayedSound = selected;
     g_hasLastPlayed = true;
 
-    // 6. 随机音量（600~1000）
-    int volume = 600 + (rand() % 401);
-
-    // 7. 通过 MCI 播放
-    mciSendStringW(L"close SoundAlias", nullptr, 0, nullptr);
-    std::wstring cmdOpen = L"open \"" + selected + L"\" alias SoundAlias";
-    if (mciSendStringW(cmdOpen.c_str(), nullptr, 0, nullptr) != 0)
+    // 6. 构建 audio_player.exe 的完整路径
+    std::wstring playerPath = dir + L"audio_player.exe";
+    if (GetFileAttributesW(playerPath.c_str()) == INVALID_FILE_ATTRIBUTES)
         return false;
 
-    wchar_t volCmd[256];
-    swprintf_s(volCmd, L"setaudio SoundAlias volume to %d", volume);
-    mciSendStringW(volCmd, nullptr, 0, nullptr);
+    // 7. 构建命令行，使用双引号包裹路径（防止空格问题）
+    std::wstring cmdLine = L"\"" + playerPath + L"\" \"" + selected + L"\"";
 
-    std::wstring cmdPlay = L"play SoundAlias from 0";
-    if (waitForFinish) cmdPlay += L" wait";
-    if (mciSendStringW(cmdPlay.c_str(), nullptr, 0, nullptr) != 0) {
-        mciSendStringW(L"close SoundAlias", nullptr, 0, nullptr);
+    // 8. 启动进程，不等待（忽略 waitForFinish 参数）
+    STARTUPINFOW si = { sizeof(si) };
+    PROCESS_INFORMATION pi;
+    if (!CreateProcessW(
+        nullptr,               // 应用程序名
+        &cmdLine[0],           // 命令行（可修改）
+        nullptr, nullptr,
+        FALSE,
+        CREATE_NO_WINDOW,      // 不显示控制台窗口（若 audio_player.exe 为 GUI 可去掉）
+        nullptr, nullptr,
+        &si, &pi
+    )) {
         return false;
     }
-    if (waitForFinish) {
-        mciSendStringW(L"close SoundAlias", nullptr, 0, nullptr);
-    }
+
+    // 关闭句柄，不等待进程结束
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
     return true;
 }
 
@@ -487,11 +491,17 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
                 }
             }
         } else {
-            // 非验证码模式或已验证，按 ESC 触发验证码
-            if (wParam == VK_ESCAPE && g_requireCode) {
-                g_showCodeInput = true;
-                GenerateCode();
-                InvalidateRect(hWnd, nullptr, TRUE);
+            // 非验证码模式或已验证
+            if (wParam == VK_ESCAPE) {
+                if (g_requireCode) {
+                    // 进入验证码模式
+                    g_showCodeInput = true;
+                    GenerateCode();
+                    InvalidateRect(hWnd, nullptr, TRUE);
+                } else {
+                    // 直接结束休息
+                    PostQuitMessage(0);
+                }
             }
         }
         break;

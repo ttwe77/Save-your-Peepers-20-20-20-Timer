@@ -19,13 +19,11 @@
 #include <cctype>
 #include <stdexcept>
 #include <algorithm>
-#include <mmsystem.h>
 
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "gdiplus.lib")
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "shcore.lib")
-#pragma comment(lib, "winmm.lib")
 #pragma comment(lib, "dwmapi.lib")
 
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
@@ -55,9 +53,7 @@ static int       g_ScreenH   = 0;
 static Image*    g_pWallpaper = nullptr;
 static bool      g_hasWallpaper = false;
 
-// 音频相关
-static std::wstring g_lastPlayedSound;
-static bool         g_hasLastPlayed = false;
+
 
 // 深色模式颜色
 static HBRUSH  g_hDarkBrush = nullptr;
@@ -255,85 +251,27 @@ void LoadWallpaper() {
     g_hasWallpaper = false;
 }
 
-// ========== 音频播放相关 ==========
-static std::vector<std::wstring> GetSoundFiles(const std::wstring& folder) {
-    std::vector<std::wstring> files;
-    std::wstring searchPath = folder + L"\\*.*";
-    WIN32_FIND_DATAW fd;
-    HANDLE hFind = FindFirstFileW(searchPath.c_str(), &fd);
-    if (hFind == INVALID_HANDLE_VALUE) return files;
-
-    do {
-        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
-            std::wstring name = fd.cFileName;
-            size_t dot = name.rfind(L'.');
-            if (dot != std::wstring::npos) {
-                std::wstring ext = name.substr(dot);
-                if (_wcsicmp(ext.c_str(), L".mp3") == 0 ||
-                    _wcsicmp(ext.c_str(), L".wav") == 0 ||
-                    _wcsicmp(ext.c_str(), L".ogg") == 0) {
-                    files.push_back(folder + L"\\" + name);
-                }
-            }
-        }
-    } while (FindNextFileW(hFind, &fd));
-    FindClose(hFind);
-    return files;
-}
-
-bool PlayRandomSound(bool waitForFinish = false) {
+// 启动 audio_player.exe（不等待）
+static void LaunchAudioPlayer() {
     wchar_t exePath[MAX_PATH];
     GetModuleFileNameW(nullptr, exePath, MAX_PATH);
     std::wstring dir = exePath;
     size_t lastSlash = dir.find_last_of(L"\\/");
     if (lastSlash != std::string::npos)
         dir = dir.substr(0, lastSlash + 1);
-    std::wstring soundsFolder = dir + L"sounds";
+    std::wstring playerPath = dir + L"audio_player.exe";
 
-    DWORD attr = GetFileAttributesW(soundsFolder.c_str());
-    if (attr == INVALID_FILE_ATTRIBUTES || !(attr & FILE_ATTRIBUTE_DIRECTORY))
-        return false;
+    // 检查文件是否存在
+    if (GetFileAttributesW(playerPath.c_str()) == INVALID_FILE_ATTRIBUTES)
+        return;   // 静默忽略，无音频播放
 
-    auto allFiles = GetSoundFiles(soundsFolder);
-    if (allFiles.empty())
-        return false;
-
-    std::vector<std::wstring> candidates = allFiles;
-    if (g_hasLastPlayed && allFiles.size() > 1) {
-        auto it = std::find(candidates.begin(), candidates.end(), g_lastPlayedSound);
-        if (it != candidates.end())
-            candidates.erase(it);
+    STARTUPINFOW si = { sizeof(si) };
+    PROCESS_INFORMATION pi;
+    if (CreateProcessW(playerPath.c_str(), NULL, NULL, NULL, FALSE,
+                       CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
     }
-    if (candidates.empty())
-        candidates = allFiles;
-
-    int idx = rand() % candidates.size();
-    std::wstring selected = candidates[idx];
-    g_lastPlayedSound = selected;
-    g_hasLastPlayed = true;
-
-    int volume = 600 + (rand() % 401);
-
-    mciSendStringW(L"close SoundAlias", nullptr, 0, nullptr);
-
-    std::wstring cmdOpen = L"open \"" + selected + L"\" alias SoundAlias";
-    if (mciSendStringW(cmdOpen.c_str(), nullptr, 0, nullptr) != 0)
-        return false;
-
-    wchar_t volCmd[256];
-    swprintf_s(volCmd, L"setaudio SoundAlias volume to %d", volume);
-    mciSendStringW(volCmd, nullptr, 0, nullptr);
-
-    std::wstring cmdPlay = L"play SoundAlias from 0";
-    if (waitForFinish) cmdPlay += L" wait";
-    if (mciSendStringW(cmdPlay.c_str(), nullptr, 0, nullptr) != 0) {
-        mciSendStringW(L"close SoundAlias", nullptr, 0, nullptr);
-        return false;
-    }
-    if (waitForFinish) {
-        mciSendStringW(L"close SoundAlias", nullptr, 0, nullptr);
-    }
-    return true;
 }
 
 // ========== 背景窗口过程 ==========
@@ -620,21 +558,33 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 
     load_settings();  // 会调用 setup_language_strings()
 
-    bool desktopCreated = false;
     try {
         CreateSecureDesktop();
-        desktopCreated = true;
-    } catch (const std::exception& e) {
-        WCHAR buf[512];
-        swprintf(buf, 512, L"无法创建安全桌面: %hs", e.what());
-        MessageBoxW(nullptr, buf, L"错误", MB_OK | MB_ICONWARNING);
+    } catch (const std::exception&) {
+        // 启动同目录下的 Overlay.exe
+        wchar_t exePath[MAX_PATH];
+        GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+        std::wstring dir = exePath;
+        size_t lastSlash = dir.find_last_of(L"\\/");
+        if (lastSlash != std::string::npos)
+            dir = dir.substr(0, lastSlash + 1);
+        std::wstring overlayPath = dir + L"Overlay.exe";
+
+        if (GetFileAttributesW(overlayPath.c_str()) != INVALID_FILE_ATTRIBUTES) {
+            STARTUPINFOW si = { sizeof(si) };
+            PROCESS_INFORMATION pi;
+            if (CreateProcessW(overlayPath.c_str(), NULL, NULL, NULL, FALSE,
+                               CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
+                CloseHandle(pi.hProcess);
+                CloseHandle(pi.hThread);
+            }
+        }
         GdiplusShutdown(gdiplusToken);
-        return 1;
+        return 0;   // 退出自身
     }
 
-    if (desktopCreated) {
-        PlayRandomSound(false);
-    }
+    // 桌面创建成功，继续执行
+    LaunchAudioPlayer();
 
     LoadWallpaper();
     
@@ -673,7 +623,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     }
 
     RestoreDesktop();
-    PlayRandomSound(true);
+    LaunchAudioPlayer();
 
     delete g_pWallpaper;
     GdiplusShutdown(gdiplusToken);
