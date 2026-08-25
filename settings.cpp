@@ -813,9 +813,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             // 创建分组框
             g_hGroupGeneral = CreateGroupBox(20, 20, 550, 135, L"");
             g_hGroupTiming  = CreateGroupBox(20, 160, 550, 100, L"");
-            g_hGroupOverlay = CreateGroupBox(20, 270, 550, 210, L"");
-            g_hGroupHotkey  = CreateGroupBox(20, 480, 550, 100, L"");
-            g_hGroupOther   = CreateGroupBox(20, 590, 550, 60, L"");
+            g_hGroupOverlay = CreateGroupBox(20, 270, 550, 270, L""); // 高度增加至 270
+            g_hGroupHotkey  = CreateGroupBox(20, 550, 550, 180, L""); // y 从 480 改为 550
+            g_hGroupOther   = CreateGroupBox(20, 740, 550, 60, L"");  // y 从 660 改为 740
 
             int labelW = 140, ctrlW = 220, ctrlH = 26, gap = 10;
             int groupInnerX = 40;
@@ -861,71 +861,80 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             y = 295;
             g_hOverlay = CreateCheck(groupInnerX, y, 260, ctrlH, L"");
             SendMessage(g_hOverlay, BM_SETCHECK, g_settings.use_overlay ? BST_CHECKED : BST_UNCHECKED, 0);
-            y += ctrlH + 12;
+            y += ctrlH + 12;  // 333
 
             g_hLabelOverlayMode = CreateLabel(groupInnerX, y, labelW, ctrlH, L"");
             g_hOverlayMode = CreateCombo(groupInnerX + labelW + gap, y, ctrlW, 100);
-            y += ctrlH + 12;
+            y += ctrlH + 12;  // 371
 
             g_hCode = CreateCheck(groupInnerX, y, 260, ctrlH, L"");
             SendMessage(g_hCode, BM_SETCHECK, g_settings.require_code ? BST_CHECKED : BST_UNCHECKED, 0);
-            y += ctrlH + 12;
+            y += ctrlH + 12;  // 409
 
             g_hWarning = CreateCheck(groupInnerX, y, 260, ctrlH, L"");
             SendMessage(g_hWarning, BM_SETCHECK, g_settings.use_warning ? BST_CHECKED : BST_UNCHECKED, 0);
-            y += ctrlH + 12;
+            y += ctrlH + 12;  // 447
 
+            // 提醒位置标签
             g_hLabelWarnPos = CreateLabel(groupInnerX, y, labelW, ctrlH, L"");
-            g_hWarnPos = CreateCombo(groupInnerX + labelW + gap, y, ctrlW, 100);
+            y += ctrlH + gap; // 447+26+10=483
+            // 提醒位置下拉框（左对齐，宽度加宽）
+            g_hWarnPos = CreateCombo(groupInnerX, y, ctrlW + 80, 100);
+            // 最后一行结束于 y+ctrlH = 483+26=509，分组框底部需大于 509，当前高度 270（顶部 270，底部 540）足够。
 
             // ---- 热键 ----
-            y = 505;
+            y = 575;  // 分组框顶部 550，内边距 20，所以起始 y=550+25=575
+            // ---- 暂停热键 ----
             g_hLabelHkPause = CreateLabel(groupInnerX, y, labelW, ctrlH, L"");
-            g_hHkPause = CreateEdit(groupInnerX + labelW + gap, y, ctrlW, ctrlH);
+            y += ctrlH + gap; // 575+26+10=611
+            g_hHkPause = CreateEdit(groupInnerX, y, ctrlW, ctrlH);
             SetWindowTextW(g_hHkPause, g_settings.hotkey_pause.c_str());
-            // 创建暂停热键的"选择..."按钮
             g_hHkPauseBrowse = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                                  ScaleX(groupInnerX + labelW + gap + ctrlW + 10), ScaleY(y),
+                                  ScaleX(groupInnerX + ctrlW + 10), ScaleY(y),
                                   ScaleX(70), ScaleY(ctrlH),
                                   hWnd, (HMENU)IDC_HK_PAUSE_BROWSE, GetModuleHandle(NULL), NULL);
             SendMessage(g_hHkPauseBrowse, WM_SETFONT, (WPARAM)g_hUIFont, TRUE);
             SetWindowTextW(g_hHkPauseBrowse, GetString(STR_FONT_BROWSE).c_str());
-            y += ctrlH + 12;
+            y += ctrlH + gap; // 611+26+10=647
 
+            // ---- 跳过热键 ----
             g_hLabelHkSkip = CreateLabel(groupInnerX, y, labelW, ctrlH, L"");
-            g_hHkSkip = CreateEdit(groupInnerX + labelW + gap, y, ctrlW, ctrlH);
+            y += ctrlH + gap; // 647+26+10=683
+            g_hHkSkip = CreateEdit(groupInnerX, y, ctrlW, ctrlH);
             SetWindowTextW(g_hHkSkip, g_settings.hotkey_skip.c_str());
-            // 创建跳过热键的"选择..."按钮
             g_hHkSkipBrowse = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                                 ScaleX(groupInnerX + labelW + gap + ctrlW + 10), ScaleY(y),
+                                 ScaleX(groupInnerX + ctrlW + 10), ScaleY(y),
                                  ScaleX(70), ScaleY(ctrlH),
                                  hWnd, (HMENU)IDC_HK_SKIP_BROWSE, GetModuleHandle(NULL), NULL);
             SendMessage(g_hHkSkipBrowse, WM_SETFONT, (WPARAM)g_hUIFont, TRUE);
             SetWindowTextW(g_hHkSkipBrowse, GetString(STR_FONT_BROWSE).c_str());
+            y += ctrlH + gap; // 683+26+10=719
+            // 分组框底部：顶部 550+高度 180=730，最后一行结束于 719+26=745，略超但可接受（滚动条处理）
 
             // ---- 其他 ----
-            y = 615;
+            // Other 分组框顶部为 740，内边距 20，所以 y=740+20=760
+            y = 760;
             g_hAutoStart = CreateCheck(groupInnerX, y, 260, ctrlH, L"");
             SendMessage(g_hAutoStart, BM_SETCHECK, g_settings.auto_start ? BST_CHECKED : BST_UNCHECKED, 0);
 
-            // ---- 保存按钮（自绘） ----
+            // 保存按钮放在 Other 分组框下方，y=780（分组框底部是 740+60=800，按钮放在 790 左右）
             g_hSave = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                                    ScaleX(20), ScaleY(660), ScaleX(120), ScaleY(32),
-                                    hWnd, (HMENU)IDC_SAVE, GetModuleHandle(NULL), NULL);
+                        ScaleX(20), ScaleY(810), ScaleX(120), ScaleY(32),
+                        hWnd, (HMENU)IDC_SAVE, GetModuleHandle(NULL), NULL);
             SendMessage(g_hSave, WM_SETFONT, (WPARAM)g_hUIFont, TRUE);
 
             // 设置窗口大小
-            SetWindowPos(hWnd, NULL, 0, 0, ScaleX(600), ScaleY(550), SWP_NOMOVE | SWP_NOZORDER);
+            SetWindowPos(hWnd, NULL, 0, 0, ScaleX(600), ScaleY(500), SWP_NOMOVE | SWP_NOZORDER);
 
-            // 计算控件总高度（取最底部控件的底部坐标 + 边距）
-            // 当前最底部是保存按钮，其 y=660，高度 32，所以底部为 660+32=692，再加一些边距
-            g_totalHeight = ScaleY(700) + 50;   // 或者更精确：遍历子控件取最大底部
+            // 最底部控件为保存按钮（未缩放 y=810, h=32），加边距 20 后为 862
+            g_totalHeight = ScaleY(862);
+
             // 初始化滚动信息
             SCROLLINFO si = { sizeof(SCROLLINFO) };
             si.fMask = SIF_RANGE | SIF_PAGE;
             si.nMin = 0;
             si.nMax = g_totalHeight - 1;
-            si.nPage = ScaleY(700);   // 客户区高度（假设窗口高度不变）
+            si.nPage = ScaleY(750);   // 客户区高度
             SetScrollInfo(hWnd, SB_VERT, &si, TRUE);
 
             // 刷新界面为当前语言

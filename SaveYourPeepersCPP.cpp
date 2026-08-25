@@ -1,6 +1,6 @@
 // SaveYourPeepersCPP.cpp
-// g++ -std=c++17 -o SaveYourPeepersCPP.exe SaveYourPeepersCPP.cpp -luser32 -lgdi32 -lcomctl32 -lshell32 -lole32 -ladvapi32 -ldwmapi -static -mwindows -O2
-#include <windows.h>
+// windres resource.rc -O coff -o resource.res
+// g++ -std=c++17 -o SaveYourPeepersCPP.exe SaveYourPeepersCPP.cpp resource.res -luser32 -lgdi32 -lcomctl32 -lshell32 -lole32 -ladvapi32 -ldwmapi -static -mwindows -O2
 #include <dwmapi.h>
 #include <commctrl.h>
 #include <shellapi.h>
@@ -351,12 +351,14 @@ std::unordered_map<std::wstring, std::unordered_map<std::wstring, std::wstring>>
         {L"btn_settings", L"设置"},
         {L"info_hotkeys", L"暂停：{pause} | 跳过：{skip}"},
         {L"cycles_count", L"🔥 已完成周期数：{count}"},
-        {L"overlay_main", L"您已持续用眼过久\n休息一会吧！\n请将注意力集中在至少6米远的地方！"},
+        {L"overlay_main", L"您已持续用眼过久\n休息一会吧！\n请将注意力集中在至少 6 米远的地方！"},
         {L"overlay_time", L"剩余：{time} 秒"},
         {L"warning_text", L"即将休息"},
         {L"btn_rest_now", L"立即休息"},
         {L"tray_show", L"显示主界面"},
+        {L"tray_restart", L"重启程序"},
         {L"tray_quit", L"彻底退出"},
+        {L"tray_tip", L"守护双眼"},
         {L"set_press_hk", L"按下快捷键组合..."},
     }},
     {L"en", {
@@ -376,8 +378,32 @@ std::unordered_map<std::wstring, std::unordered_map<std::wstring, std::wstring>>
         {L"warning_text", L"👀 Rest soon!"},
         {L"btn_rest_now", L"Rest Now"},
         {L"tray_show", L"Show"},
+        {L"tray_restart", L"Restart"},
         {L"tray_quit", L"Quit"},
+        {L"tray_tip", L"Save Your Peepers Timer"},
         {L"set_press_hk", L"Press combination..."},
+    }},
+    {L"ru", {
+        {L"title", L"Защитите свои глаза👁️"},
+        {L"focus", L"Сосредоточьтесь"},
+        {L"pause", L"Приостановлено"},
+        {L"rest_overlay", L"Смотрите вдаль!"},
+        {L"rest_no_overlay", L"Отдых (без экрана)"},
+        {L"btn_pause", L"Пауза"},
+        {L"btn_resume", L"Возобновить"},
+        {L"btn_skip", L"Пропустить цикл"},
+        {L"btn_settings", L"Настройки"},
+        {L"info_hotkeys", L"Пауза: {pause} | Пропуск: {skip}"},
+        {L"cycles_count", L"🔥 Завершено циклов: {count}"},
+        {L"overlay_main", L"Вы слишком долго смотрите в экран\nОтдохните!\nСмотрите вдаль (не менее 6 метров)!"},
+        {L"overlay_time", L"Осталось: {time} сек."},
+        {L"warning_text", L"👀 Скоро отдых!"},
+        {L"btn_rest_now", L"Отдохнуть сейчас"},
+        {L"tray_show", L"Показать главное окно"},
+        {L"tray_restart", L"Перезапустить"},
+        {L"tray_quit", L"Выйти"},
+        {L"tray_tip", L"Таймер для глаз"},
+        {L"set_press_hk", L"Нажмите комбинацию клавиш..."},
     }}
 };
 
@@ -493,6 +519,7 @@ public:
         wc.lpfnWndProc = WndProc;
         wc.hInstance = GetModuleHandle(nullptr);
         wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+        wc.hIcon = LoadIconW(GetModuleHandle(nullptr), L"MAINICON");
         wc.hbrBackground = m_hBgBrush;
         wc.lpszClassName = L"TimerAppClass";
         RegisterClassExW(&wc);
@@ -550,6 +577,21 @@ public:
 
 private:
     HWND m_hWnd, m_hWndWarn;
+    void RestartApp() {
+        wchar_t exePath[MAX_PATH];
+        GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+        ShellExecuteW(nullptr, L"open", exePath, nullptr, nullptr, SW_SHOW);
+        PostQuitMessage(0);
+    }
+
+    void ToggleWindowVisibility() {
+        if (IsWindowVisible(m_hWnd)) {
+            ShowWindow(m_hWnd, SW_HIDE);
+        } else {
+            ShowWindow(m_hWnd, SW_SHOW);
+            SetForegroundWindow(m_hWnd);
+        }
+    }
     HWND m_hPhaseLabel, m_hTimeLabel, m_hPauseBtn, m_hSkipBtn, m_hRestNowBtn, m_hSettingsBtn, m_hCyclesLabel, m_hInfoLabel;
     bool m_isPaused, m_isWorking;
     int m_timeLeft;
@@ -721,6 +763,9 @@ private:
                         ShowWindow(m_hWnd, SW_SHOW);
                         SetForegroundWindow(m_hWnd);
                         break;
+                    case 1003:
+                        RestartApp();
+                        break;
                     case 1002: // 彻底退出
                         DestroyWindow(m_hWnd);   // 会触发 WM_DESTROY，随后 PostQuitMessage
                         break;
@@ -823,8 +868,14 @@ private:
                 PostQuitMessage(0);
                 break;
             case WM_TRAYNOTIFY:
-                if (lParam == WM_LBUTTONDBLCLK) ShowWindow(m_hWnd, SW_SHOW);
-                else if (lParam == WM_RBUTTONUP) ShowTrayMenu();
+                if (lParam == WM_LBUTTONDBLCLK) {
+                    ShowWindow(m_hWnd, SW_SHOW);
+                    SetForegroundWindow(m_hWnd);
+                } else if (lParam == WM_RBUTTONUP) {
+                    ShowTrayMenu();
+                } else if (lParam == WM_LBUTTONUP) {
+                    ToggleWindowVisibility();
+                }
                 break;
             default:
                 return DefWindowProcW(hWnd, msg, wParam, lParam);
@@ -956,10 +1007,11 @@ private:
         m_nid.uID = 100;
         m_nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
         m_nid.uCallbackMessage = WM_TRAYNOTIFY;
-        HICON hIcon = LoadIconW(GetModuleHandle(nullptr), MAKEINTRESOURCEW(101));
+        HICON hIcon = LoadIconW(GetModuleHandle(nullptr), L"MAINICON");
         if (!hIcon) hIcon = LoadIconW(nullptr, (LPCWSTR)IDI_APPLICATION);
         m_nid.hIcon = hIcon;
-        wcscpy_s(m_nid.szTip, L"20-20-20 Timer");
+        std::wstring tip = tr(L"tray_tip");
+        wcscpy_s(m_nid.szTip, tip.c_str());
         Shell_NotifyIconW(NIM_ADD, &m_nid);
     }
 
@@ -968,6 +1020,7 @@ private:
     void ShowTrayMenu() {
         HMENU hMenu = CreatePopupMenu();
         AppendMenuW(hMenu, MF_STRING, 1001, tr(L"tray_show").c_str());
+        AppendMenuW(hMenu, MF_STRING, 1003, tr(L"tray_restart").c_str());
         AppendMenuW(hMenu, MF_STRING, 1002, tr(L"tray_quit").c_str());
         POINT pt;
         GetCursorPos(&pt);
