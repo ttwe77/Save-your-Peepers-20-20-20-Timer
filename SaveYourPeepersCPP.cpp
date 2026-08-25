@@ -470,8 +470,11 @@ void PlayRandomSound() {
 class TimerApp {
 public:
     TimerApp() : m_hWnd(nullptr), m_hWndWarn(nullptr), m_isPaused(false), m_isWorking(true),
-                 m_timeLeft(g_workDuration), m_overlayProcess(nullptr), m_hFontNormal(nullptr), m_hFontBig(nullptr), m_hWarnBgBrush(nullptr), m_hWarnFont(nullptr), m_hBgBrush(nullptr)
+                 m_timeLeft(g_workDuration), m_overlayProcess(nullptr), m_hFontNormal(nullptr), m_hFontBig(nullptr), m_hWarnFont(nullptr), m_hWarnBgBrush(nullptr), m_hBgBrush(nullptr),
+                 m_hoveredBtn(nullptr)
     {
+        // 初始化鼠标跟踪映射
+        m_btnTracking[nullptr] = false;
         // 根据主题设置颜色
         if (g_theme == L"Dark") {
             m_bgColor = RGB(32, 32, 32);
@@ -557,19 +560,44 @@ private:
     HBRUSH m_hWarnBgBrush = nullptr;
     COLORREF m_bgColor, m_textColor;   // 背景色和文本色
     HBRUSH m_hBgBrush;                 // 对应背景色的画刷
+    std::unordered_map<HWND, bool> m_buttonHover;   // 按钮→是否悬停
+    HWND m_hoveredBtn = nullptr;                    // 当前悬停的按钮句柄
+    std::unordered_map<HWND, bool> m_btnTracking;   // 每个按钮的鼠标跟踪状态
+    // 原 WndProc 保存
+    std::unordered_map<HWND, WNDPROC> m_oldBtnProcs;
+    // 子类化窗口过程（静态）
+    static LRESULT CALLBACK ButtonSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+    // 处理子类化消息的辅助函数
+    LRESULT OnButtonMouse(HWND hBtn, UINT msg, WPARAM wParam, LPARAM lParam);
 
     void DrawButton(LPDRAWITEMSTRUCT dis) {
         HDC hdc = dis->hDC;
         RECT rc = dis->rcItem;
 
         bool dark = (g_theme == L"Dark");
-        COLORREF bg = dark ? RGB(45, 45, 45) : RGB(250, 250, 250);
-        COLORREF fg = dark ? RGB(240, 240, 240) : RGB(30, 30, 30);
-        COLORREF border = dark ? RGB(100, 100, 100) : RGB(180, 180, 180);
+        bool hover = false;
+        auto it = m_buttonHover.find(dis->hwndItem);
+        if (it != m_buttonHover.end())
+            hover = it->second;
 
-        if (dis->itemState & ODS_SELECTED) {
+        COLORREF bg;
+        if (hover)
+        {
+            // 悬停时：深色主题用更亮的灰，浅色主题用更暗的灰
+            bg = dark ? RGB(80, 80, 80) : RGB(200, 200, 200);
+        }
+        else
+        {
+            bg = dark ? RGB(45, 45, 45) : RGB(250, 250, 250);
+        }
+        // 按下时（ODS_SELECTED）可保持原有逻辑，或与悬停叠加
+        if (dis->itemState & ODS_SELECTED)
+        {
             bg = dark ? RGB(70, 70, 70) : RGB(220, 220, 220);
         }
+
+        COLORREF fg = dark ? RGB(240, 240, 240) : RGB(30, 30, 30);
+        COLORREF border = dark ? RGB(100, 100, 100) : RGB(180, 180, 180);
 
         // 背景
         HBRUSH brush = CreateSolidBrush(bg);
@@ -619,21 +647,37 @@ private:
                                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
                                     120, 200, 300, 50, m_hWnd, (HMENU)10, GetModuleHandle(nullptr), nullptr);
         SendMessage(m_hPauseBtn, WM_SETFONT, (WPARAM)m_hFontNormal, TRUE);
+        m_buttonHover[m_hPauseBtn] = false;
+        m_btnTracking[m_hPauseBtn] = false;
+        SetWindowLongPtrW(m_hPauseBtn, GWLP_USERDATA, (LONG_PTR)this);
+        m_oldBtnProcs[m_hPauseBtn] = (WNDPROC)SetWindowLongPtrW(m_hPauseBtn, GWLP_WNDPROC, (LONG_PTR)ButtonSubclassProc);
 
         m_hSkipBtn = CreateWindowW(L"BUTTON", tr(L"btn_skip").c_str(),
                                    WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
                                    120, 260, 300, 50, m_hWnd, (HMENU)11, GetModuleHandle(nullptr), nullptr);
         SendMessage(m_hSkipBtn, WM_SETFONT, (WPARAM)m_hFontNormal, TRUE);
+        m_buttonHover[m_hSkipBtn] = false;
+        m_btnTracking[m_hSkipBtn] = false;
+        SetWindowLongPtrW(m_hSkipBtn, GWLP_USERDATA, (LONG_PTR)this);
+        m_oldBtnProcs[m_hSkipBtn] = (WNDPROC)SetWindowLongPtrW(m_hSkipBtn, GWLP_WNDPROC, (LONG_PTR)ButtonSubclassProc);
 
         m_hRestNowBtn = CreateWindowW(L"BUTTON", tr(L"btn_rest_now").c_str(),
                                       WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
                                       120, 320, 300, 50, m_hWnd, (HMENU)12, GetModuleHandle(nullptr), nullptr);
         SendMessage(m_hRestNowBtn, WM_SETFONT, (WPARAM)m_hFontNormal, TRUE);
+        m_buttonHover[m_hRestNowBtn] = false;
+        m_btnTracking[m_hRestNowBtn] = false;
+        SetWindowLongPtrW(m_hRestNowBtn, GWLP_USERDATA, (LONG_PTR)this);
+        m_oldBtnProcs[m_hRestNowBtn] = (WNDPROC)SetWindowLongPtrW(m_hRestNowBtn, GWLP_WNDPROC, (LONG_PTR)ButtonSubclassProc);
 
         m_hSettingsBtn = CreateWindowW(L"BUTTON", tr(L"btn_settings").c_str(),
                                        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
                                        120, 380, 300, 50, m_hWnd, (HMENU)13, GetModuleHandle(nullptr), nullptr);
         SendMessage(m_hSettingsBtn, WM_SETFONT, (WPARAM)m_hFontNormal, TRUE);
+        m_buttonHover[m_hSettingsBtn] = false;
+        m_btnTracking[m_hSettingsBtn] = false;
+        SetWindowLongPtrW(m_hSettingsBtn, GWLP_USERDATA, (LONG_PTR)this);
+        m_oldBtnProcs[m_hSettingsBtn] = (WNDPROC)SetWindowLongPtrW(m_hSettingsBtn, GWLP_WNDPROC, (LONG_PTR)ButtonSubclassProc);
 
         m_hCyclesLabel = CreateWindowW(L"STATIC", L"",
                                        WS_CHILD | WS_VISIBLE | SS_CENTER,
@@ -711,6 +755,69 @@ private:
             case WM_DRAWITEM: {
                 DrawButton((LPDRAWITEMSTRUCT)lParam);
                 return TRUE;
+            }
+            case WM_MOUSEMOVE:
+            {
+                // 获取鼠标在客户区的位置
+                POINT pt = { LOWORD(lParam), HIWORD(lParam) };
+                // 获取该位置下的子窗口（最顶层）
+                HWND hChild = ChildWindowFromPoint(m_hWnd, pt);
+
+                // 检查该子窗口是否是我们关心的按钮
+                auto it = m_buttonHover.find(hChild);
+                if (it != m_buttonHover.end())
+                {
+                    // 鼠标落在某个按钮上
+                    if (m_hoveredBtn != hChild)
+                    {
+                        // 清除旧悬停
+                        if (m_hoveredBtn && m_buttonHover.find(m_hoveredBtn) != m_buttonHover.end())
+                        {
+                            m_buttonHover[m_hoveredBtn] = false;
+                            InvalidateRect(m_hoveredBtn, nullptr, TRUE);
+                        }
+                        // 设置新悬停
+                        m_hoveredBtn = hChild;
+                        m_buttonHover[hChild] = true;
+                        InvalidateRect(hChild, nullptr, TRUE);
+                    }
+                }
+                else
+                {
+                    // 鼠标不在任何按钮上
+                    if (m_hoveredBtn)
+                    {
+                        if (m_buttonHover.find(m_hoveredBtn) != m_buttonHover.end())
+                        {
+                            m_buttonHover[m_hoveredBtn] = false;
+                            InvalidateRect(m_hoveredBtn, nullptr, TRUE);
+                        }
+                        m_hoveredBtn = nullptr;
+                    }
+                }
+
+                // 启用鼠标离开跟踪（只调用一次）- 保持全局跟踪以捕获窗口级别的离开
+                if (m_btnTracking.count(nullptr) == 0 || !m_btnTracking[nullptr])
+                {
+                    TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, m_hWnd, 0 };
+                    TrackMouseEvent(&tme);
+                    m_btnTracking[nullptr] = true;
+                }
+                return 0;
+            }
+            case WM_MOUSELEAVE:
+            {
+                m_btnTracking[nullptr] = false;
+                if (m_hoveredBtn)
+                {
+                    if (m_buttonHover.find(m_hoveredBtn) != m_buttonHover.end())
+                    {
+                        m_buttonHover[m_hoveredBtn] = false;
+                        InvalidateRect(m_hoveredBtn, nullptr, TRUE);
+                    }
+                    m_hoveredBtn = nullptr;
+                }
+                return 0;
             }
             case WM_DESTROY:
                 PostQuitMessage(0);
@@ -903,6 +1010,56 @@ private:
             MessageBoxW(m_hWnd, L"未找到 Settings.exe", L"错误", MB_OK);
     }
 };
+
+// ======================== 子类化实现 ========================
+// 子类化窗口过程
+LRESULT CALLBACK TimerApp::ButtonSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    TimerApp* app = (TimerApp*)GetWindowLongPtrW(hWnd, GWLP_USERDATA);
+    if (app) {
+        // 如果是鼠标相关消息，交给 OnButtonMouse 处理
+        if (msg == WM_MOUSEMOVE || msg == WM_MOUSELEAVE) {
+            return app->OnButtonMouse(hWnd, msg, wParam, lParam);
+        }
+        // 其他消息调用原窗口过程
+        WNDPROC oldProc = app->m_oldBtnProcs[hWnd];
+        if (oldProc) return CallWindowProcW(oldProc, hWnd, msg, wParam, lParam);
+    }
+    return DefWindowProcW(hWnd, msg, wParam, lParam);
+}
+
+// 处理子类化消息的辅助函数
+LRESULT TimerApp::OnButtonMouse(HWND hBtn, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+        case WM_MOUSEMOVE: {
+            // 若此前未跟踪，启用离开跟踪
+            if (!m_btnTracking[hBtn]) {
+                TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, hBtn, 0 };
+                TrackMouseEvent(&tme);
+                m_btnTracking[hBtn] = true;
+            }
+            // 如果当前不是悬停状态，设置并重绘
+            if (!m_buttonHover[hBtn]) {
+                m_buttonHover[hBtn] = true;
+                InvalidateRect(hBtn, nullptr, TRUE);
+            }
+            break;
+        }
+        case WM_MOUSELEAVE: {
+            m_btnTracking[hBtn] = false;
+            if (m_buttonHover[hBtn]) {
+                m_buttonHover[hBtn] = false;
+                InvalidateRect(hBtn, nullptr, TRUE);
+            }
+            break;
+        }
+    }
+    // 调用原按钮过程，让按钮正常响应点击等
+    WNDPROC oldProc = m_oldBtnProcs[hBtn];
+    if (oldProc) return CallWindowProcW(oldProc, hBtn, msg, wParam, lParam);
+    return DefWindowProcW(hBtn, msg, wParam, lParam);
+}
+
+// ======================== WinMain ========================
 
 // ======================== WinMain ========================
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
